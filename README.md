@@ -24,10 +24,44 @@ OpenZeppelin provides the RWA token + compliance dispatcher (engine). Constella 
 
 ## Status
 
-🚧 Early / pre-MVP. Design phase.
+🟢 **MVP built & verified.** Contracts compile to wasm, `cargo test` is green, the full
+stack is deployed and exercised live on Stellar testnet (real pass + revert), and a web
+demo simulates compliance gating in the browser.
 
 - Product requirements: [`docs/PRD-Constella.md`](docs/PRD-Constella.md)
-- Architecture (in progress): [`docs/architecture.md`](docs/architecture.md)
+- Architecture: [`docs/architecture.md`](docs/architecture.md)
+- Decisions log: [`docs/DECISIONS.md`](docs/DECISIONS.md)
+
+## Layout
+
+```
+crates/        Soroban contracts (Rust)
+  module-interface/          standard module ABI + clients
+  compliance/                dispatcher engine (mirrors OZ surface)
+  module-max-holders/        \
+  module-lockup/              } the 4 MVP compliance modules
+  module-max-balance/        /
+  module-country-restrict/  /
+  identity-mock/             attestor stand-in (IdentityProvider)
+  demo-token/                minimal SEP-41 permissioned token + integration test
+scripts/       testnet deploy + live demo (deploy-testnet.sh)
+web/           React launch-taste demo (live pass/revert simulation)
+docs/          PRD, architecture, decisions
+```
+
+## Quickstart
+
+```bash
+# build + test the contracts
+stellar contract build
+cargo test
+
+# deploy to testnet and run a real pass/revert demo
+bash scripts/deploy-testnet.sh
+
+# run the web demo
+cd web && npm install && npm run dev
+```
 
 ## Roadmap (high level)
 
