@@ -11,25 +11,26 @@ import deployed from './deployed.testnet.json';
 
 const server = new rpc.Server(deployed.rpcUrl);
 const NP = deployed.networkPassphrase;
-// Any existing account works as the source for a read-only simulation; auth is
-// recorded (not enforced) during simulateTransaction, so the compliance logic runs.
 const SOURCE = deployed.accounts.admin;
 
-function build(contractId: string, method: string, args: ReturnType<typeof nativeToScVal>[]) {
+type ScVal = ReturnType<typeof nativeToScVal>;
+const addr = (a: string) => nativeToScVal(a, { type: 'address' });
+const i128 = (n: number | string) => nativeToScVal(n, { type: 'i128' });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function buildFrom(sourceAcc: Account, contractId: string, method: string, args: ScVal[]) {
   const c = new Contract(contractId);
-  const acc = new Account(SOURCE, '0');
-  return new TransactionBuilder(acc, { fee: BASE_FEE, networkPassphrase: NP })
+  return new TransactionBuilder(sourceAcc, { fee: BASE_FEE, networkPassphrase: NP })
     .addOperation(c.call(method, ...args))
-    .setTimeout(30)
+    .setTimeout(120)
     .build();
 }
 
-async function simulate(contractId: string, method: string, args: ReturnType<typeof nativeToScVal>[]) {
-  return server.simulateTransaction(build(contractId, method, args));
-}
+// --- read-only simulation (no account needed beyond a placeholder) ---
 
-const addr = (a: string) => nativeToScVal(a, { type: 'address' });
-const i128 = (n: number | string) => nativeToScVal(n, { type: 'i128' });
+async function simulate(contractId: string, method: string, args: ScVal[]) {
+  return server.simulateTransaction(buildFrom(new Account(SOURCE, '0'), contractId, method, args));
+}
 
 export async function readBalance(account: string): Promise<string> {
   const sim = await simulate(deployed.contracts.token, 'balance', [addr(account)]);
@@ -49,17 +50,52 @@ export async function readHolders(): Promise<string> {
   return String(scValToNative(sim.result!.retval));
 }
 
-export type TransferResult = { ok: boolean; reason: string };
+function humanize(msg: string): string {
+  if (/#6\b|Denied/.test(msg)) return 'Denied by a compliance module';
+  return msg;
+}
 
-/** Live-simulate a transfer against the deployed compliant token. */
-export async function simulateTransfer(from: string, to: string, amount: number): Promise<TransferResult> {
-  const sim = await simulate(deployed.contracts.token, 'transfer', [addr(from), addr(to), i128(amount)]);
-  if (rpc.Api.isSimulationError(sim)) {
-    // The dispatcher panics with ComplianceError::Denied (#6) when a module rejects.
-    const denied = /Error\(Contract, #6\)|Denied/.test(sim.error);
-    return { ok: false, reason: denied ? 'Denied by a compliance module' : sim.error };
+export type SendResult = { ok: boolean; denied: boolean; reason: string; hash: string };
+
+/**
+ * Build + prepare + (Freighter-)sign + submit a real transfer from `from` to `to`.
+ * `from` must be the connected wallet (it is both the tx source and the authorizer).
+ * If a compliance module rejects, preparation fails and we report `denied`.
+ */
+export async function submitTransfer(
+  from: string,
+  to: string,
+  amount: number,
+  sign: (xdr: string) => Promise<string>,
+): Promise<SendResult> {
+  const account = await server.getAccount(from);
+  const tx = buildFrom(account, deployed.contracts.token, 'transfer', [addr(from), addr(to), i128(amount)]);
+
+  let prepared;
+  try {
+    prepared = await server.prepareTransaction(tx);
+  } catch (e) {
+    return { ok: false, denied: true, reason: humanize(String((e as Error).message || e)), hash: '' };
   }
-  return { ok: true, reason: 'Allowed by all registered modules' };
+
+  const signedXDR = await sign(prepared.toXDR());
+  const signedTx = TransactionBuilder.fromXDR(signedXDR, NP);
+  const sent = await server.sendTransaction(signedTx);
+  if (sent.status === 'ERROR') {
+    return { ok: false, denied: false, reason: 'Submit error', hash: sent.hash };
+  }
+
+  let got = await server.getTransaction(sent.hash);
+  for (let i = 0; i < 20 && got.status === rpc.Api.GetTransactionStatus.NOT_FOUND; i++) {
+    await sleep(1000);
+    got = await server.getTransaction(sent.hash);
+  }
+  return {
+    ok: got.status === rpc.Api.GetTransactionStatus.SUCCESS,
+    denied: false,
+    reason: got.status,
+    hash: sent.hash,
+  };
 }
 
 export { deployed };
