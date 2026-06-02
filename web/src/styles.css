@@ -48,6 +48,11 @@ button {
   padding: 10px 16px; font-weight: 600; cursor: pointer;
 }
 button:disabled { opacity: 0.6; cursor: default; }
+.holders-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.holders-table th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.holders-table td { padding: 10px 8px; border-bottom: 1px solid var(--line); }
+.holders-table tr:last-child td { border-bottom: none; }
+.holders-table td.bal { text-align: right; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .send { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
 .send button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .send button .sub { font-weight: 400; font-size: 11px; color: #4a3a00; }

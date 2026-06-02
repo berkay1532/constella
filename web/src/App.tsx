@@ -26,19 +26,32 @@ const RECIPIENTS = [
   { addr: deployed.accounts.carol, label: 'Carol', flag: '🇹🇷', note: 'TR — not allowed' },
 ];
 
+const BASE_HOLDERS = [
+  { addr: deployed.accounts.alice, label: 'Alice', flag: '🇺🇸', country: 'US' },
+  { addr: deployed.accounts.bob, label: 'Bob', flag: '🇩🇪', country: 'DE' },
+  { addr: deployed.accounts.carol, label: 'Carol', flag: '🇹🇷', country: 'TR' },
+];
+
 export function App() {
   const [supply, setSupply] = useState('…');
   const [holders, setHolders] = useState('…');
   const [wallet, setWallet] = useState<string | null>(null);
-  const [walletBal, setWalletBal] = useState('—');
   const [busy, setBusy] = useState('');
   const [result, setResult] = useState<(SendResult & { to: string }) | null>(null);
   const [error, setError] = useState('');
+  const [balances, setBalances] = useState<Record<string, string>>({});
+
+  const holderRows = wallet
+    ? [{ addr: wallet, label: 'You', flag: '👛', country: 'US' }, ...BASE_HOLDERS]
+    : BASE_HOLDERS;
+  const walletBal = wallet ? balances[wallet] ?? '—' : '—';
 
   async function refresh() {
     setSupply(await readTotalSupply());
     setHolders(await readHolders());
-    if (wallet) setWalletBal(await readBalance(wallet));
+    const addrs = wallet ? [wallet, ...BASE_HOLDERS.map((h) => h.addr)] : BASE_HOLDERS.map((h) => h.addr);
+    const entries = await Promise.all(addrs.map(async (a) => [a, await readBalance(a)] as const));
+    setBalances(Object.fromEntries(entries));
   }
 
   useEffect(() => {
@@ -122,6 +135,25 @@ export function App() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="card">
+        <h2>Token holders</h2>
+        <p className="muted">Live balances — updated after each transfer.</p>
+        <table className="holders-table">
+          <thead>
+            <tr><th>Holder</th><th>Country</th><th>Balance</th></tr>
+          </thead>
+          <tbody>
+            {holderRows.map((h) => (
+              <tr key={h.addr}>
+                <td>{h.flag} {h.label} <span className="muted">{short(h.addr)}</span></td>
+                <td>{h.country}</td>
+                <td className="bal">{balances[h.addr] ?? '…'} TOK</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section className="card">
