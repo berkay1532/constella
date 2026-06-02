@@ -27,3 +27,7 @@ Thumbs.db
 # Soroban test snapshots
 test_snapshots/
 **/test_snapshots/
+
+# macOS/iCloud duplicate artifacts
+* 2.*
+*\ 2.*
