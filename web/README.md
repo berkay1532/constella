@@ -1,9 +1,9 @@
-# Constella — Web demo (launch-taste)
+# Constella — Web demo (Freighter, real transactions)
 
-A minimal React + Vite app that talks to the Constella contracts deployed on Stellar
-testnet. It shows the compliant token, its registered compliance modules, attested
-investors, and lets you **live-simulate a transfer** to see the modules allow or deny
-it in real time (via Soroban RPC `simulateTransaction`).
+A React + Vite app that talks to the Constella contracts on Stellar testnet. Connect
+**Freighter**, and your wallet becomes a verified holder of the regulated token: you can
+send a real, signed transfer to **Bob (DE — allowed)** but the **CountryRestrict** module
+blocks a transfer to **Carol (TR — not allowed)** before you even sign.
 
 ## Run
 
@@ -13,20 +13,28 @@ npm install
 npm run dev      # open the printed localhost URL
 ```
 
-The app reads `src/deployed.testnet.json` (contract ids + accounts), produced by
-`../scripts/deploy-testnet.sh`. To point at a fresh deployment, re-run that script and
-copy the JSON:
+Requirements:
+- The **Freighter** browser extension, set to **Testnet**.
+- The local `stellar` CLI with a funded **`deployer`** identity (the same one used by
+  `../scripts/deploy-testnet.sh`). The dev server exposes a small `/api/bootstrap`
+  endpoint that uses it to fund + attest + mint to your connected wallet. The admin
+  secret never enters the frontend bundle, and this endpoint only exists under `npm run dev`.
+
+## Flow
+
+1. **Connect Freighter** — shows your address.
+2. **Prepare my wallet** — funds it (friendbot), attests its country (US), mints 1,000 TOK
+   (admin-signed, server-side via the CLI).
+3. **Send 100 → Bob** — prepares, you sign in Freighter, it submits; balances update and a
+   tx link appears.
+4. **Send 100 → Carol** — rejected by `CountryRestrict` at preparation; no signature needed.
+
+It reads `src/deployed.testnet.json` (produced by `../scripts/deploy-testnet.sh`). Re-run
+that script and copy the JSON to point at a fresh deployment:
 
 ```bash
-bash ../scripts/deploy-testnet.sh
-cp ../scripts/deployed.testnet.json src/deployed.testnet.json
+bash ../scripts/deploy-testnet.sh && cp ../scripts/deployed.testnet.json src/deployed.testnet.json
 ```
 
-## What it demonstrates
-
-- **Alice (US) → Bob (DE)**: allowed by all modules.
-- **Alice (US) → Carol (TR)**: denied by `CountryRestrict`.
-
-Transfers are *simulated* (read-only) so no wallet/signing is needed for the demo. In
-production the sender signs with a wallet (e.g. Freighter) and the same modules gate
-the real transaction.
+> A read-only **simulation** path also exists in `src/stellar.ts` (no wallet needed) if you
+> want to show the gate without signing.

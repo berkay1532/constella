@@ -4,77 +4,105 @@ import {
   readBalance,
   readTotalSupply,
   readHolders,
-  simulateTransfer,
-  type TransferResult,
+  submitTransfer,
+  type SendResult,
 } from './stellar';
+import { connectWallet, currentAddress, signXDR } from './freighter';
 
 const EXPLORER = 'https://stellar.expert/explorer/testnet';
 const cLink = (id: string) => `${EXPLORER}/contract/${id}`;
-
-const PEOPLE: Record<string, { label: string; country: string; flag: string }> = {
-  [deployed.accounts.alice]: { label: 'Alice', country: 'US (allowed)', flag: '🇺🇸' },
-  [deployed.accounts.bob]: { label: 'Bob', country: 'DE (allowed)', flag: '🇩🇪' },
-  [deployed.accounts.carol]: { label: 'Carol', country: 'TR (not allowed)', flag: '🇹🇷' },
-};
+const txLink = (h: string) => `${EXPLORER}/tx/${h}`;
+const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 
 const MODULES = [
-  { name: 'CountryRestrict', id: deployed.contracts.countryRestrict, desc: 'Allowed countries only: US, DE', kind: 'identity' },
+  { name: 'CountryRestrict', id: deployed.contracts.countryRestrict, desc: 'Allowed countries: US, DE', kind: 'identity' },
   { name: 'MaxHolders', id: deployed.contracts.maxHolders, desc: 'Holder cap: 5', kind: 'trustless' },
   { name: 'MaxBalance', id: deployed.contracts.maxBalance, desc: 'Per-holder cap: 1,000,000', kind: 'trustless' },
   { name: 'Lockup', id: deployed.contracts.lockup, desc: 'Transfer lock: 0s (demo)', kind: 'trustless' },
 ];
 
-const short = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+const RECIPIENTS = [
+  { addr: deployed.accounts.bob, label: 'Bob', flag: '🇩🇪', note: 'DE — allowed' },
+  { addr: deployed.accounts.carol, label: 'Carol', flag: '🇹🇷', note: 'TR — not allowed' },
+];
 
 export function App() {
   const [supply, setSupply] = useState('…');
   const [holders, setHolders] = useState('…');
-  const [balances, setBalances] = useState<Record<string, string>>({});
-  const [from, setFrom] = useState(deployed.accounts.alice);
-  const [to, setTo] = useState(deployed.accounts.carol);
-  const [amount, setAmount] = useState(100);
-  const [result, setResult] = useState<TransferResult | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [wallet, setWallet] = useState<string | null>(null);
+  const [walletBal, setWalletBal] = useState('—');
+  const [busy, setBusy] = useState('');
+  const [result, setResult] = useState<(SendResult & { to: string }) | null>(null);
+  const [error, setError] = useState('');
 
   async function refresh() {
     setSupply(await readTotalSupply());
     setHolders(await readHolders());
-    const entries = await Promise.all(
-      Object.keys(PEOPLE).map(async (a) => [a, await readBalance(a)] as const),
-    );
-    setBalances(Object.fromEntries(entries));
+    if (wallet) setWalletBal(await readBalance(wallet));
   }
 
   useEffect(() => {
-    refresh().catch(console.error);
+    currentAddress().then((a) => setWallet(a));
   }, []);
+  useEffect(() => {
+    refresh().catch(console.error);
+  }, [wallet]);
 
-  async function onSimulate() {
-    setBusy(true);
-    setResult(null);
+  async function onConnect() {
+    setError('');
     try {
-      setResult(await simulateTransfer(from, to, amount));
+      setWallet(await connectWallet());
     } catch (e) {
-      setResult({ ok: false, reason: String(e) });
-    } finally {
-      setBusy(false);
+      setError(String((e as Error).message || e));
     }
   }
+
+  async function onPrepare() {
+    if (!wallet) return;
+    setError('');
+    setBusy('prepare');
+    try {
+      const r = await fetch(`/api/bootstrap?addr=${wallet}`);
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'bootstrap failed');
+      await refresh();
+    } catch (e) {
+      setError(String((e as Error).message || e));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function onSend(to: string) {
+    if (!wallet) return;
+    setError('');
+    setResult(null);
+    setBusy(to);
+    try {
+      const res = await submitTransfer(wallet, to, 100, (xdr) => signXDR(xdr, wallet));
+      setResult({ ...res, to });
+      await refresh();
+    } catch (e) {
+      setError(String((e as Error).message || e));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  const needsTokens = wallet && walletBal !== '—' && Number(walletBal) === 0;
 
   return (
     <div className="wrap">
       <header>
         <h1>✨ Constella</h1>
-        <p className="tag">Modular compliance for Stellar RWA tokens — live on testnet.</p>
+        <p className="tag">Modular compliance for Stellar RWA tokens — live on testnet, signed with your wallet.</p>
       </header>
 
       <section className="card">
         <h2>Compliant token</h2>
         <div className="row">
           <span className="muted">Token</span>
-          <a href={cLink(deployed.contracts.token)} target="_blank" rel="noreferrer">
-            {short(deployed.contracts.token)} ↗
-          </a>
+          <a href={cLink(deployed.contracts.token)} target="_blank" rel="noreferrer">{short(deployed.contracts.token)} ↗</a>
         </div>
         <div className="stats">
           <div><b>{supply}</b><span>total supply</span></div>
@@ -85,7 +113,6 @@ export function App() {
 
       <section className="card">
         <h2>Registered compliance modules</h2>
-        <p className="muted">Plug-and-play rules checked on every transfer by the dispatcher.</p>
         <ul className="modules">
           {MODULES.map((m) => (
             <li key={m.id}>
@@ -98,45 +125,57 @@ export function App() {
       </section>
 
       <section className="card">
-        <h2>Investors (attested by the identity provider)</h2>
-        <ul className="people">
-          {Object.entries(PEOPLE).map(([addr, p]) => (
-            <li key={addr}>
-              <span className="who">{p.flag} {p.label}</span>
-              <span className="muted">{p.country}</span>
-              <span className="bal">{balances[addr] ?? '…'} TOK</span>
-            </li>
-          ))}
-        </ul>
+        <h2>Your wallet</h2>
+        {!wallet ? (
+          <>
+            <p className="muted">Connect Freighter (testnet) to hold the regulated token and send real, signed transfers.</p>
+            <button onClick={onConnect}>Connect Freighter</button>
+          </>
+        ) : (
+          <>
+            <div className="row">
+              <span className="who">👛 {short(wallet)} <span className="muted">(US — attested)</span></span>
+              <span className="bal">{walletBal} TOK</span>
+            </div>
+            {needsTokens && (
+              <>
+                <p className="muted">Your wallet isn’t set up yet. Prepare it: fund + attest country (US) + mint 1,000 TOK.</p>
+                <button onClick={onPrepare} disabled={busy === 'prepare'}>
+                  {busy === 'prepare' ? 'Preparing…' : 'Prepare my wallet'}
+                </button>
+              </>
+            )}
+          </>
+        )}
       </section>
 
-      <section className="card">
-        <h2>Try a transfer (live simulation)</h2>
-        <p className="muted">Simulated against the deployed contracts on testnet — the real modules decide.</p>
-        <div className="form">
-          <label>From
-            <select value={from} onChange={(e) => setFrom(e.target.value)}>
-              {Object.entries(PEOPLE).map(([a, p]) => <option key={a} value={a}>{p.label}</option>)}
-            </select>
-          </label>
-          <label>To
-            <select value={to} onChange={(e) => setTo(e.target.value)}>
-              {Object.entries(PEOPLE).map(([a, p]) => <option key={a} value={a}>{p.label}</option>)}
-            </select>
-          </label>
-          <label>Amount
-            <input type="number" value={amount} min={1} onChange={(e) => setAmount(Number(e.target.value))} />
-          </label>
-          <button onClick={onSimulate} disabled={busy}>{busy ? 'Simulating…' : 'Simulate transfer'}</button>
-        </div>
-        {result && (
-          <div className={`result ${result.ok ? 'ok' : 'denied'}`}>
-            {result.ok ? '✅ Allowed' : '❌ Denied'} — {result.reason}
+      {wallet && !needsTokens && (
+        <section className="card">
+          <h2>Send a real transfer (signed with Freighter)</h2>
+          <p className="muted">100 TOK from your wallet. The compliance modules decide — and you sign the ones they allow.</p>
+          <div className="send">
+            {RECIPIENTS.map((r) => (
+              <button key={r.addr} onClick={() => onSend(r.addr)} disabled={!!busy}>
+                {busy === r.addr ? 'Sending…' : `Send 100 → ${r.flag} ${r.label}`}
+                <span className="sub">{r.note}</span>
+              </button>
+            ))}
           </div>
-        )}
-        <p className="hint">Tip: Alice→Bob passes; Alice→Carol is denied (Carol is in a disallowed country).
-          In production the sender signs with a wallet (e.g. Freighter); here we simulate to show the gate.</p>
-      </section>
+          {result && (
+            <div className={`result ${result.ok ? 'ok' : 'denied'}`}>
+              {result.ok ? '✅ Transfer succeeded' : result.denied ? '❌ Denied by compliance' : `⚠️ ${result.reason}`}
+              {result.hash && (
+                <>
+                  {' '}— <a href={txLink(result.hash)} target="_blank" rel="noreferrer">view tx ↗</a>
+                </>
+              )}
+            </div>
+          )}
+          <p className="hint">Send to Bob (DE) succeeds; send to Carol (TR) is blocked by CountryRestrict before you even sign.</p>
+        </section>
+      )}
+
+      {error && <div className="result denied">{error}</div>}
 
       <footer>
         <a href={cLink(deployed.contracts.compliance)} target="_blank" rel="noreferrer">compliance engine</a>
