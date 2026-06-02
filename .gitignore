@@ -1,0 +1,25 @@
+# Rust / Soroban
+/target/
+**/target/
+*.wasm
+# (Cargo.lock is kept — recommended for contract workspaces)
+
+# Node / web UI
+node_modules/
+dist/
+.next/
+*.log
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.key
+identity-*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local Claude settings (personal, not shared)
+.claude/settings.local.json
