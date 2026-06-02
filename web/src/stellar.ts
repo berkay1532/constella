@@ -55,6 +55,35 @@ function humanize(msg: string): string {
   return msg;
 }
 
+const COUNTRY_NAMES: Record<number, string> = { 840: 'US', 276: 'DE', 792: 'TR' };
+
+/**
+ * Inspect the live identity/country contracts to explain *why* a transfer to `to`
+ * is rejected (so the UI can show a specific, on-chain-verified reason). Returns ''
+ * if it isn't a country/identity issue (some other module denied).
+ */
+export async function explainDenial(to: string): Promise<string> {
+  try {
+    const idSim = await simulate(deployed.contracts.identity, 'country_of', [addr(to)]);
+    if (rpc.Api.isSimulationError(idSim)) return '';
+    const code = scValToNative(idSim.result!.retval) as number | null | undefined;
+    if (code === null || code === undefined) {
+      return 'Recipient is not verified by the identity provider (checked on-chain)';
+    }
+    const allowSim = await simulate(deployed.contracts.countryRestrict, 'allowed', []);
+    const allowed = rpc.Api.isSimulationError(allowSim)
+      ? []
+      : (scValToNative(allowSim.result!.retval) as number[]);
+    if (!allowed.includes(Number(code))) {
+      const name = COUNTRY_NAMES[Number(code)] ?? code;
+      return `Recipient's country (${name}) is not in the allowed list — rejected by the on-chain CountryRestrict contract`;
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
 export type SendResult = { ok: boolean; denied: boolean; reason: string; hash: string };
 
 /**
@@ -75,7 +104,14 @@ export async function submitTransfer(
   try {
     prepared = await server.prepareTransaction(tx);
   } catch (e) {
-    return { ok: false, denied: true, reason: humanize(String((e as Error).message || e)), hash: '' };
+    // Compliance rejected at simulation (before signing) — explain it specifically.
+    const specific = await explainDenial(to);
+    return {
+      ok: false,
+      denied: true,
+      reason: specific || humanize(String((e as Error).message || e)),
+      hash: '',
+    };
   }
 
   const signedXDR = await sign(prepared.toXDR());

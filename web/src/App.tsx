@@ -156,14 +156,14 @@ export function App() {
           <div className="send">
             {RECIPIENTS.map((r) => (
               <button key={r.addr} onClick={() => onSend(r.addr)} disabled={!!busy}>
-                {busy === r.addr ? 'Sending…' : `Send 100 → ${r.flag} ${r.label}`}
+                {busy === r.addr ? 'Checking on-chain…' : `Send 100 → ${r.flag} ${r.label}`}
                 <span className="sub">{r.note}</span>
               </button>
             ))}
           </div>
           {result && (
             <div className={`result ${result.ok ? 'ok' : 'denied'}`}>
-              {result.ok ? '✅ Transfer succeeded' : result.denied ? '❌ Denied by compliance' : `⚠️ ${result.reason}`}
+              {result.ok ? '✅ Transfer succeeded' : result.denied ? `❌ ${result.reason}` : `⚠️ ${result.reason}`}
               {result.hash && (
                 <>
                   {' '}— <a href={txLink(result.hash)} target="_blank" rel="noreferrer">view tx ↗</a>
@@ -171,7 +171,12 @@ export function App() {
               )}
             </div>
           )}
-          <p className="hint">Send to Bob (DE) succeeds; send to Carol (TR) is blocked by CountryRestrict before you even sign.</p>
+          <p className="hint">
+            Bob (DE) succeeds — you sign and it settles on-chain. Carol (TR) is rejected by the live
+            CountryRestrict contract <b>at simulation, before you sign</b>: a compliant wallet won’t
+            make you sign (or pay for) a transfer the on-chain rules reject — and Soroban needs a
+            successful simulation to even build the transaction.
+          </p>
         </section>
       )}
 
