@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   deployed,
   readBalance,
@@ -46,11 +46,19 @@ export function App() {
     : BASE_HOLDERS;
   const walletBal = wallet ? balances[wallet] ?? '—' : '—';
 
+  const reqId = useRef(0);
   async function refresh() {
-    setSupply(await readTotalSupply());
-    setHolders(await readHolders());
+    // Guard against out-of-order responses: when the page loads with a wallet already
+    // connected, an early wallet=null refresh races a later wallet-aware one. Only the
+    // newest refresh's result is allowed to win, so it never clobbers the wallet balance.
+    const myId = ++reqId.current;
+    const supplyV = await readTotalSupply();
+    const holdersV = await readHolders();
     const addrs = wallet ? [wallet, ...BASE_HOLDERS.map((h) => h.addr)] : BASE_HOLDERS.map((h) => h.addr);
     const entries = await Promise.all(addrs.map(async (a) => [a, await readBalance(a)] as const));
+    if (myId !== reqId.current) return; // superseded by a newer refresh
+    setSupply(supplyV);
+    setHolders(holdersV);
     setBalances(Object.fromEntries(entries));
   }
 
