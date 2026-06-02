@@ -37,8 +37,17 @@ For the "launch-taste" demo: deploy/select modules + run a real transfer that pa
 ### D10 — Git workflow: **GitHub Flow** — feature branches → PR → squash-merge → main
 main always green. Repo: `github.com/berkay1532/constella` (private). Only this repo is touched.
 
-### D11 — ZK layer: **out of MVP**, Phase 2 (`module-identity-zk`)
-BLS12-381 Groth16 (CAP-0059), pre-registered eligibility flag pattern. Not built in MVP; architecture leaves a clean seam (D6 IdentityProvider interface).
+### D11 — ZK layer: Phase 2 **implemented** (`module-identity-zk` + `zk-verifier`)
+BLS12-381 Groth16 (CAP-0059) via the SDK's native crypto, adapted from
+`soroban-examples/groth16_verifier`. Circuit (`zk/`) proves `country ∈ allowed` + a
+Poseidon commitment binding, **without revealing the country**; `module-identity-zk`
+registers commitments, verifies proofs (cross-contract), and sets an eligibility flag —
+a drop-in `IdentityProvider` (`country_of` → `None`). Real proof generated with
+circom/snarkjs and verified on-chain in tests (~40M instr). **[CONFIRM LATER]** demo-grade:
+non-audited, BN254-derived Poseidon constants over BLS12-381, single-contribution trusted
+setup, and issuer-signature credential binding is still future work (uses a commitment).
+Wired into the compliance flow (CountryRestrict using the ZK provider via `is_verified`)
+is the remaining integration step.
 
 ### D12 — SCF track (Build vs Public Goods): **deferred**
 Per PRD §13 — decide with mentor after hackathon. No code impact.

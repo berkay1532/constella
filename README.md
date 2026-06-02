@@ -44,6 +44,9 @@ crates/        Soroban contracts (Rust)
   module-country-restrict/  /
   identity-mock/             attestor stand-in (IdentityProvider)
   demo-token/                minimal SEP-41 permissioned token + integration test
+  zk-verifier/               Groth16 / BLS12-381 verifier (Phase 2)
+  module-identity-zk/        ZK identity provider — prove country ∈ allowed, hidden (Phase 2)
+zk/            ZK circuit (country eligibility) + proof artifacts (Phase 2)
 scripts/       testnet deploy + live demo (deploy-testnet.sh)
 web/           React launch-taste demo (live pass/revert simulation)
 docs/          PRD, architecture, decisions
