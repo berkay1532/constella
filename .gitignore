@@ -23,3 +23,7 @@ Thumbs.db
 
 # Local Claude settings (personal, not shared)
 .claude/settings.local.json
+
+# Soroban test snapshots
+test_snapshots/
+**/test_snapshots/
