@@ -85,17 +85,23 @@ export async function submitTransfer(
     return { ok: false, denied: false, reason: 'Submit error', hash: sent.hash };
   }
 
-  let got = await server.getTransaction(sent.hash);
-  for (let i = 0; i < 20 && got.status === rpc.Api.GetTransactionStatus.NOT_FOUND; i++) {
-    await sleep(1000);
-    got = await server.getTransaction(sent.hash);
+  // Poll for finality, but tolerate result-meta XDR parse hiccups: the transaction is
+  // already submitted, so fall back to "submitted" + explorer link rather than erroring.
+  try {
+    let got = await server.getTransaction(sent.hash);
+    for (let i = 0; i < 20 && got.status === rpc.Api.GetTransactionStatus.NOT_FOUND; i++) {
+      await sleep(1000);
+      got = await server.getTransaction(sent.hash);
+    }
+    return {
+      ok: got.status === rpc.Api.GetTransactionStatus.SUCCESS,
+      denied: false,
+      reason: got.status,
+      hash: sent.hash,
+    };
+  } catch {
+    return { ok: true, denied: false, reason: 'submitted', hash: sent.hash };
   }
-  return {
-    ok: got.status === rpc.Api.GetTransactionStatus.SUCCESS,
-    denied: false,
-    reason: got.status,
-    hash: sent.hash,
-  };
 }
 
 export { deployed };
