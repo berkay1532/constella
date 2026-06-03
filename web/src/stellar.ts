@@ -91,21 +91,26 @@ export type SendResult = { ok: boolean; denied: boolean; reason: string; hash: s
  * `from` must be the connected wallet (it is both the tx source and the authorizer).
  * If a compliance module rejects, preparation fails and we report `denied`.
  */
-export async function submitTransfer(
+type SignFn = (xdr: string) => Promise<string>;
+type ExplainFn = (to: string) => Promise<string>;
+
+async function txTransfer(
+  tokenId: string,
   from: string,
   to: string,
   amount: number,
-  sign: (xdr: string) => Promise<string>,
+  sign: SignFn,
+  explain: ExplainFn,
 ): Promise<SendResult> {
   const account = await server.getAccount(from);
-  const tx = buildFrom(account, deployed.contracts.token, 'transfer', [addr(from), addr(to), i128(amount)]);
+  const tx = buildFrom(account, tokenId, 'transfer', [addr(from), addr(to), i128(amount)]);
 
   let prepared;
   try {
     prepared = await server.prepareTransaction(tx);
   } catch (e) {
     // Compliance rejected at simulation (before signing) — explain it specifically.
-    const specific = await explainDenial(to);
+    const specific = await explain(to).catch(() => '');
     return {
       ok: false,
       denied: true,
@@ -140,11 +145,16 @@ export async function submitTransfer(
   }
 }
 
+/** Real signed transfer on the main (cleartext-compliance) token. */
+export const submitTransfer = (from: string, to: string, amount: number, sign: SignFn) =>
+  txTransfer(deployed.contracts.token, from, to, amount, sign, explainDenial);
+
 // --- ZK eligibility (Phase 2) ---
 
-type ZkInfo = { identityZk: string; commitment: string };
+type ZkInfo = { identityZk: string; commitment: string; zkToken: string; dave: string };
 const ZK = (deployed as { zk?: ZkInfo }).zk;
 export const hasZk = Boolean(ZK?.identityZk);
+export const zkDave = ZK?.dave ?? '';
 
 /** Read the ZK identity provider's eligibility flag for an account. */
 export async function zkIsVerified(account: string): Promise<boolean> {
@@ -153,5 +163,24 @@ export async function zkIsVerified(account: string): Promise<boolean> {
   if (rpc.Api.isSimulationError(sim)) return false;
   return scValToNative(sim.result!.retval) === true;
 }
+
+/** Balance on the ZK-gated token. */
+export async function readZkBalance(account: string): Promise<string> {
+  if (!ZK) return '—';
+  const sim = await simulate(ZK.zkToken, 'balance', [addr(account)]);
+  if (rpc.Api.isSimulationError(sim)) return '—';
+  return String(scValToNative(sim.result!.retval));
+}
+
+/** Real signed transfer on the ZK-gated token — gated on the recipient's ZK eligibility. */
+export const submitZkTransfer = (from: string, to: string, amount: number, sign: SignFn) =>
+  txTransfer(
+    ZK!.zkToken,
+    from,
+    to,
+    amount,
+    sign,
+    async () => 'Recipient is not ZK-eligible — their country is never revealed',
+  );
 
 export { deployed };
