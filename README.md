@@ -224,6 +224,44 @@ The dev API endpoints (`/api/*`) run the local `stellar` CLI as the **deployer/a
 
 `deployed.testnet.json` is what both the web app and the dev API read.
 
+### 8.1 Deployed on testnet (live)
+
+Network: **testnet** · RPC `https://soroban-testnet.stellar.org` · passphrase `Test SDF Network ; September 2015`. Every contract below is live and explorable — click an address.
+
+**Core compliance stack (cleartext path):**
+
+| Contract | Address | What it does |
+|---|---|---|
+| **demo-token** | [`CDWDVUSP…ALKH4ISP`](https://stellar.expert/explorer/testnet/contract/CDWDVUSP5KJWS562PPZY2AJZKZTGDYXTEL34LLB5DEBCGQOKALKH4ISP) | SEP-41-style permissioned RWA token; routes every mint/transfer through the dispatcher |
+| **compliance** | [`CB4PQFPC…NBGSBB`](https://stellar.expert/explorer/testnet/contract/CB4PQFPCVFAZHU6LO3Y2B3QQPEK25GUJGDCR6H3QPWJEERJ7GWNBGSBB) | the dispatcher (engine): per-hook module registry, AND-combined pre-checks, fan-out post-events |
+| **identity-mock** | [`CDCTU7NK…I3SHVLZD`](https://stellar.expert/explorer/testnet/contract/CDCTU7NKRB7A6NDZPMZZIQN7DVXUHRDO6M5IHQ5OAJYUHS3UI3SHVLZD) | cleartext attestor — `country_of` / `is_verified` (Layer 1 identity) |
+| **module-country-restrict** | [`CCWBDSDD…334VU3FA`](https://stellar.expert/explorer/testnet/contract/CCWBDSDD7MSUSRUVJQKRJVXEG67AVDZMTJ7KTFFX5TSXF72F334VU3FA) | recipient's country ∈ allowed (US, DE); reads the identity layer |
+| **module-max-holders** | [`CAXX3AHY…24TDNHFL`](https://stellar.expert/explorer/testnet/contract/CAXX3AHYYTFAEOEPDKARXKKI6I2J7NA3ESWEL5GAYHTJUXQK24TDNHFL) | ≤ 5 distinct holders; self-tracks a balance mirror from the event stream |
+| **module-max-balance** | [`CDXG5N5V…MZCI5GA7`](https://stellar.expert/explorer/testnet/contract/CDXG5N5VCU5PWNAUNBBDUSMOFZOXWZYYTNRR7FZ5KOY6CX44MZCI5GA7) | ≤ cap per holder; self-tracks a balance mirror |
+| **module-lockup** | [`CADJ6CKD…VWVSYNAL`](https://stellar.expert/explorer/testnet/contract/CADJ6CKDBZPQ5EM2JCBQK5CWYY2H6QQ3IIFKI4P6NK3OMNYXVWVSYNAL) | no transfer for T seconds after acquiring (T = 0 in the demo) |
+
+**Zero-knowledge layer (Phase 2):**
+
+| Contract | Address | What it does |
+|---|---|---|
+| **zk-verifier** | [`CCACFVOM…XWOMCAD`](https://stellar.expert/explorer/testnet/contract/CCACFVOMNQRKGIBTCILPEAONIKXKI3LD76AAXHUULM4G5F6UAXWOMCAD) | Groth16 / BLS12-381 on-chain verifier (`pairing_check`) |
+| **module-identity-zk** | [`CBGEPGZ2…474VLMO34`](https://stellar.expert/explorer/testnet/contract/CBGEPGZ2JSPK6ZJQCNUBOED3OKFCIOJME356W3TJ6NDFNZ2474VLMO34) | ZK identity provider — proves country ∈ allowed, hidden; `country_of → none` |
+| **module-zk-eligibility** | [`CCHSQTUZ…GA3IR3BB`](https://stellar.expert/explorer/testnet/contract/CCHSQTUZNMH6GQ7AH24BQ7VKQE5EAUJORI3VLF3Z34PVIV56GA3IR3BB) | compliance module gating on the ZK `is_verified` flag — a boolean, no country read |
+| **compliance (ZK token)** | [`CDBDUQ4S…K3PY377`](https://stellar.expert/explorer/testnet/contract/CDBDUQ4SKTEPOGEVFV5YZJOQTE4KQQW55KL6ZI7ZXCWNYULRUK3PY377) | second dispatcher instance wired to the ZK-eligibility module |
+| **zk-token** | [`CCWYNJQJ…2XTNS`](https://stellar.expert/explorer/testnet/contract/CCWYNJQJCPGJRFAMDNNCH2OCIXOYBNFZM5QKDRODUAHOD3KEIPE2XTNS) | RWA token whose transfers gate on ZK eligibility (recipient privacy) |
+
+**Demo accounts:**
+
+| Account | Address | Role |
+|---|---|---|
+| **deployer / admin** | [`GBV24FM5…WAHJ3ZJJZ`](https://stellar.expert/explorer/testnet/account/GBV24FM5FP6Q736N2JS57N3EGUTGVOLBVP34PXKKGMCDDKEWAHJ3ZJJZ) | issuer / attestor (mints, sets identities) |
+| **alice** | [`GABGIKC7…2HNNQRZY`](https://stellar.expert/explorer/testnet/account/GABGIKC77WTE3TSCCA4GLQOLAUOQGJESNUFCGCHLI4HFWNCS2HNNQRZY) | US — compliant holder |
+| **bob** | [`GB3IWVIG…XE2TTVJ5`](https://stellar.expert/explorer/testnet/account/GB3IWVIGHCDSQGA7ZMGAOENBQYM4MYI4TFVL2CPWLPEWDXNWXE2TTVJ5) | DE — allowed recipient (transfer passes) |
+| **carol** | [`GBGFB7RK…Y7SNYDKK`](https://stellar.expert/explorer/testnet/account/GBGFB7RKGK6LP5KKXP6ZRHK7P2U6EDRGTCK3LAM5USCUGWL2Y7SNYDKK) | TR — disallowed (cleartext denial reveals TR; ZK denial does not) |
+| **dave** | [`GDUCS55S…XAIFCPA35`](https://stellar.expert/explorer/testnet/account/GDUCS55SNRZNQIDD3TS2WD2BGVV5V56JF7TTQREP6EBFBWBXAIFCPA35) | ZK-eligible recipient (proven via on-chain Groth16; country stays private) |
+
+> Addresses come from the latest `scripts/deploy-testnet.sh` run and are mirrored in [`scripts/deployed.testnet.json`](scripts/deployed.testnet.json). Re-running the deploy script generates a fresh set.
+
 ---
 
 ## 9. Quickstart
