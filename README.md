@@ -246,9 +246,7 @@ Prereqs: `stellar` CLI, Rust (≥ 1.91, for soroban-sdk 26), `wasm32v1-none` tar
 
 ---
 
-## 10. Roadmap & honest caveats
-
-**Roadmap:** module registry + one-tx deployment factory → hosted issuer console (launchpad) → premium modules + compliance-as-a-service. See [PRD](docs/PRD-Constella.md).
+## 10. Honest caveats
 
 **Demonstration-grade — not production:**
 - Contracts are **unaudited**; the dispatcher/token are a self-contained reference (align with OZ's module ABI is future work).
