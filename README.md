@@ -252,7 +252,7 @@ Prereqs: `stellar` CLI, Rust (≥ 1.91, for soroban-sdk 26), `wasm32v1-none` tar
 
 **Demonstration-grade — not production:**
 - Contracts are **unaudited**; the dispatcher/token are a self-contained reference (align with OZ's module ABI is future work).
-- ZK is demo-grade: circomlib **Poseidon constants are BN254-derived** (non-standard over BLS12-381 — the curve Soroban's on-chain crypto requires), the trusted setup is a **single local contribution**, and the demo submits a **pre-generated** proof. Binding a real **issuer-signed KYC credential** into the circuit is future work (we use a Poseidon commitment).
+- ZK is demo-grade. (BLS12-381 itself is the right, *required* curve — Soroban's on-chain crypto only supports it, and it's the stronger one at 128-bit. The caveat is the **hash, not the curve**: circomlib's Poseidon ships **BN254-tuned constants**, and we run it over BLS12-381, so it's a non-standard hash parameterization — the production fix is BLS12-381-proper Poseidon constants, not a different curve.) Also: the trusted setup is a **single local contribution**, the demo submits a **pre-generated** proof, and binding a real **issuer-signed KYC credential** into the circuit is future work (we use a Poseidon commitment).
 - The dev `/api/*` bootstrap uses the local CLI admin key (testnet, never shipped).
 
 (Note: the *eligible / not-eligible* boolean being public is **by design**, not a limitation — see §6.4. ZK hides the country, not the eligibility verdict.)
