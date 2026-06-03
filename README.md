@@ -195,6 +195,8 @@ country_of(account)  -> None                      // the country is private — 
 
 A compliance module whose `can_transfer/can_create` check `is_verified(to)` on the ZK provider — **a boolean, no country read**. Registered on a second token (`zk_token`) in the demo. A disallowed recipient is simply "not eligible"; their country never appears on-chain. This is the privacy win over `CountryRestrict`.
 
+> **What's public vs private here is by design.** The *eligible / not-eligible* boolean is **intentionally public** — that's exactly what a compliance check exists to expose. What ZK hides is the **sensitive attribute** (the country / identity). So Constella reveals the minimum a regulator needs (eligibility) and nothing more (the country).
+
 ---
 
 ## 7. The web demo (`web/`)
@@ -250,9 +252,10 @@ Prereqs: `stellar` CLI, Rust (≥ 1.91, for soroban-sdk 26), `wasm32v1-none` tar
 
 **Demonstration-grade — not production:**
 - Contracts are **unaudited**; the dispatcher/token are a self-contained reference (align with OZ's module ABI is future work).
-- ZK is demo-grade: circomlib **Poseidon constants are BN254-derived** (non-standard over BLS12-381), the trusted setup is a **single local contribution**, and the demo submits a **pre-generated** proof. Binding a real **issuer-signed KYC credential** into the circuit is future work (we use a Poseidon commitment).
-- Even with ZK, gating on a recipient leaks a **boolean** ("eligible / not"); hiding that too needs confidential state.
+- ZK is demo-grade: circomlib **Poseidon constants are BN254-derived** (non-standard over BLS12-381 — the curve Soroban's on-chain crypto requires), the trusted setup is a **single local contribution**, and the demo submits a **pre-generated** proof. Binding a real **issuer-signed KYC credential** into the circuit is future work (we use a Poseidon commitment).
 - The dev `/api/*` bootstrap uses the local CLI admin key (testnet, never shipped).
+
+(Note: the *eligible / not-eligible* boolean being public is **by design**, not a limitation — see §6.4. ZK hides the country, not the eligibility verdict.)
 
 ## License
 
