@@ -1,10 +1,11 @@
 import { defineConfig, type PluginOption } from 'vite';
 import react from '@vitejs/plugin-react';
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFileSync } from 'node:fs';
 
 const run = promisify(exec);
+const runFile = promisify(execFile);
 
 /**
  * Dev-only middleware: bootstraps a freshly-connected wallet so it can act as a
@@ -32,6 +33,29 @@ function bootstrapPlugin(): PluginOption {
             `stellar contract invoke --id ${d.contracts.token} --source deployer ${net} -- mint --to ${account} --amount 1000`,
           );
           res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
+        }
+      });
+
+      // Submit a real ZK proof on-chain for the connected wallet: register its commitment
+      // and prove eligibility (the country stays private). Uses the local CLI deployer.
+      server.middlewares.use('/api/zk-prove', async (req, res) => {
+        res.setHeader('content-type', 'application/json');
+        try {
+          const url = new URL(req.url ?? '', 'http://localhost');
+          const account = url.searchParams.get('addr');
+          if (!account || !account.startsWith('G')) throw new Error('valid ?addr=G... required');
+          const d = JSON.parse(readFileSync(new URL('./src/deployed.testnet.json', import.meta.url), 'utf8'));
+          const id = d.zk.identityZk as string;
+          const commit = d.zk.commitment as string;
+          const proof = JSON.stringify(d.zk.proof);
+          const base = ['contract', 'invoke', '--id', id, '--source', 'deployer', '--network', 'testnet'];
+          await runFile('stellar', [...base, '--', 'register_commitment', '--account', account, '--commitment', commit]);
+          const out = await runFile('stellar', [...base, '--send=yes', '--', 'prove_eligibility', '--account', account, '--commitment', commit, '--proof', proof]);
+          const hash = (`${out.stdout}\n${out.stderr}`.match(/tx\/([a-f0-9]{64})/) || [])[1] ?? '';
+          res.end(JSON.stringify({ ok: true, hash }));
         } catch (e) {
           res.statusCode = 500;
           res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));

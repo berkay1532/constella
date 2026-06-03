@@ -5,6 +5,8 @@ import {
   readTotalSupply,
   readHolders,
   submitTransfer,
+  zkIsVerified,
+  hasZk,
   type SendResult,
 } from './stellar';
 import { connectWallet, currentAddress, signXDR } from './freighter';
@@ -40,6 +42,9 @@ export function App() {
   const [result, setResult] = useState<(SendResult & { to: string }) | null>(null);
   const [error, setError] = useState('');
   const [balances, setBalances] = useState<Record<string, string>>({});
+  const [zkVerified, setZkVerified] = useState(false);
+  const [zkBusy, setZkBusy] = useState(false);
+  const [zkHash, setZkHash] = useState('');
 
   const holderRows = wallet
     ? [{ addr: wallet, label: 'You', flag: '👛', country: 'US' }, ...BASE_HOLDERS]
@@ -60,6 +65,24 @@ export function App() {
     setSupply(supplyV);
     setHolders(holdersV);
     setBalances(Object.fromEntries(entries));
+    if (wallet && hasZk) setZkVerified(await zkIsVerified(wallet));
+  }
+
+  async function onProveZk() {
+    if (!wallet) return;
+    setError('');
+    setZkBusy(true);
+    try {
+      const r = await fetch(`/api/zk-prove?addr=${wallet}`);
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'zk proof failed');
+      setZkHash(j.hash || '');
+      setZkVerified(await zkIsVerified(wallet));
+    } catch (e) {
+      setError(String((e as Error).message || e));
+    } finally {
+      setZkBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -217,6 +240,35 @@ export function App() {
             make you sign (or pay for) a transfer the on-chain rules reject — and Soroban needs a
             successful simulation to even build the transaction.
           </p>
+        </section>
+      )}
+
+      {wallet && hasZk && (
+        <section className="card">
+          <h2>🔒 Zero-knowledge eligibility (Phase 2)</h2>
+          <p className="muted">
+            Prove your country is in the allowed set <b>without revealing which country</b> — a real
+            Groth16/BLS12-381 proof, verified on-chain. The contract only ever sees a commitment and the
+            allowed set; your country is never published.
+          </p>
+          <div className="row">
+            <span className="muted">ZK status</span>
+            <span className={zkVerified ? 'zk-ok' : 'muted'}>
+              {zkVerified ? '✅ Proven eligible · country_of: none (private)' : 'not proven yet'}
+            </span>
+          </div>
+          {!zkVerified ? (
+            <button onClick={onProveZk} disabled={zkBusy}>
+              {zkBusy ? 'Verifying proof on-chain…' : 'Prove eligibility (zero-knowledge)'}
+            </button>
+          ) : (
+            zkHash && (
+              <div className="result ok">
+                ✅ Proof verified on-chain — country stayed private —{' '}
+                <a href={txLink(zkHash)} target="_blank" rel="noreferrer">view tx ↗</a>
+              </div>
+            )
+          )}
         </section>
       )}
 

@@ -38,3 +38,18 @@ bash ../scripts/deploy-testnet.sh && cp ../scripts/deployed.testnet.json src/dep
 
 > A read-only **simulation** path also exists in `src/stellar.ts` (no wallet needed) if you
 > want to show the gate without signing.
+
+## Zero-knowledge eligibility (Phase 2)
+
+With a wallet connected, the **🔒 Zero-knowledge eligibility** card lets you prove your
+country is in the allowed set **without revealing it**:
+
+- "Prove eligibility (zero-knowledge)" → the dev `/api/zk-prove` endpoint registers your
+  wallet's commitment and submits a **real Groth16/BLS12-381 proof** to the
+  `module-identity-zk` contract, verified **on-chain**.
+- Afterwards the card shows `✅ Proven eligible · country_of: none (private)` and a link to
+  the real verification transaction.
+
+The proof artifacts come from `../zk` (see `../zk/README.md`); the country (e.g. `840`/US)
+never appears on-chain — only the commitment and the allowed set do.
+
