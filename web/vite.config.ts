@@ -61,6 +61,25 @@ function bootstrapPlugin(): PluginOption {
           res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
         }
       });
+
+      // Admin mints the ZK-gated token to a (ZK-verified) wallet so it can transfer.
+      server.middlewares.use('/api/zk-mint', async (req, res) => {
+        res.setHeader('content-type', 'application/json');
+        try {
+          const url = new URL(req.url ?? '', 'http://localhost');
+          const account = url.searchParams.get('addr');
+          if (!account || !account.startsWith('G')) throw new Error('valid ?addr=G... required');
+          const d = JSON.parse(readFileSync(new URL('./src/deployed.testnet.json', import.meta.url), 'utf8'));
+          await runFile('stellar', [
+            'contract', 'invoke', '--id', d.zk.zkToken, '--source', 'deployer', '--network', 'testnet',
+            '--', 'mint', '--to', account, '--amount', '1000',
+          ]);
+          res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ ok: false, error: String((e as Error).message || e) }));
+        }
+      });
     },
   };
 }

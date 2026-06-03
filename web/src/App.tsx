@@ -5,8 +5,11 @@ import {
   readTotalSupply,
   readHolders,
   submitTransfer,
+  submitZkTransfer,
+  readZkBalance,
   zkIsVerified,
   hasZk,
+  zkDave,
   type SendResult,
 } from './stellar';
 import { connectWallet, currentAddress, signXDR } from './freighter';
@@ -34,6 +37,11 @@ const BASE_HOLDERS = [
   { addr: deployed.accounts.carol, label: 'Carol', flag: '🇹🇷', country: 'TR' },
 ];
 
+const ZK_RECIPIENTS = [
+  { addr: zkDave, label: 'Dave', flag: '🟢', note: 'ZK-eligible (proven)' },
+  { addr: deployed.accounts.carol, label: 'Carol', flag: '🔴', note: 'not ZK-eligible — country hidden' },
+];
+
 export function App() {
   const [supply, setSupply] = useState('…');
   const [holders, setHolders] = useState('…');
@@ -45,6 +53,9 @@ export function App() {
   const [zkVerified, setZkVerified] = useState(false);
   const [zkBusy, setZkBusy] = useState(false);
   const [zkHash, setZkHash] = useState('');
+  const [zkBal, setZkBal] = useState('—');
+  const [zkBusy2, setZkBusy2] = useState('');
+  const [zkSendRes, setZkSendRes] = useState<(SendResult & { to: string }) | null>(null);
 
   const holderRows = wallet
     ? [{ addr: wallet, label: 'You', flag: '👛', country: 'US' }, ...BASE_HOLDERS]
@@ -65,7 +76,42 @@ export function App() {
     setSupply(supplyV);
     setHolders(holdersV);
     setBalances(Object.fromEntries(entries));
-    if (wallet && hasZk) setZkVerified(await zkIsVerified(wallet));
+    if (wallet && hasZk) {
+      setZkVerified(await zkIsVerified(wallet));
+      setZkBal(await readZkBalance(wallet));
+    }
+  }
+
+  async function onZkMint() {
+    if (!wallet) return;
+    setError('');
+    setZkBusy2('mint');
+    try {
+      const r = await fetch(`/api/zk-mint?addr=${wallet}`);
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'mint failed');
+      await refresh();
+    } catch (e) {
+      setError(String((e as Error).message || e));
+    } finally {
+      setZkBusy2('');
+    }
+  }
+
+  async function onZkSend(to: string) {
+    if (!wallet) return;
+    setError('');
+    setZkSendRes(null);
+    setZkBusy2(to);
+    try {
+      const res = await submitZkTransfer(wallet, to, 100, (xdr) => signXDR(xdr, wallet));
+      setZkSendRes({ ...res, to });
+      await refresh();
+    } catch (e) {
+      setError(String((e as Error).message || e));
+    } finally {
+      setZkBusy2('');
+    }
   }
 
   async function onProveZk() {
@@ -269,6 +315,48 @@ export function App() {
               </div>
             )
           )}
+        </section>
+      )}
+
+      {wallet && hasZk && zkVerified && (
+        <section className="card">
+          <h2>🔒 ZK-gated transfer — recipient privacy</h2>
+          <p className="muted">
+            This token gates on the recipient's <b>ZK eligibility flag</b>, not a cleartext country.
+            A non-eligible recipient is simply rejected — their country is never read or revealed.
+          </p>
+          <div className="row">
+            <span className="muted">Your ZK-token balance</span>
+            <span className="bal">{zkBal} zkTOK</span>
+          </div>
+          {zkBal !== '—' && Number(zkBal) === 0 ? (
+            <button onClick={onZkMint} disabled={zkBusy2 === 'mint'}>
+              {zkBusy2 === 'mint' ? 'Minting…' : 'Get ZK-gated tokens'}
+            </button>
+          ) : (
+            <div className="send">
+              {ZK_RECIPIENTS.map((r) => (
+                <button key={r.addr} onClick={() => onZkSend(r.addr)} disabled={!!zkBusy2}>
+                  {zkBusy2 === r.addr ? 'Checking on-chain…' : `Send 100 → ${r.flag} ${r.label}`}
+                  <span className="sub">{r.note}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {zkSendRes && (
+            <div className={`result ${zkSendRes.ok ? 'ok' : 'denied'}`}>
+              {zkSendRes.ok ? '✅ Transfer succeeded' : `❌ ${zkSendRes.reason}`}
+              {zkSendRes.hash && (
+                <>
+                  {' '}— <a href={txLink(zkSendRes.hash)} target="_blank" rel="noreferrer">view tx ↗</a>
+                </>
+              )}
+            </div>
+          )}
+          <p className="hint">
+            Compare with the cleartext token above: there, rejecting a transfer to Carol revealed she is
+            <b> TR</b>. Here, Carol is rejected as “not eligible” and her country never appears on-chain.
+          </p>
         </section>
       )}
 

@@ -82,6 +82,19 @@ inv "$IDZK" deployer set_policy --vk "$VKJSON" --allowed '[840,276]' >/dev/null
 echo "  verifier=$VERIFIER"
 echo "  identityZk=$IDZK"
 
+echo "▸ Deploying ZK-gated token (gates on is_verified, not country) + eligible recipient…"
+ZK_ELIG=$(dep constella_module_zk_eligibility --admin "$ADMIN" --identity "$IDZK")
+ZK_COMPLIANCE=$(dep constella_compliance --admin "$ADMIN")
+inv "$ZK_COMPLIANCE" deployer add_module_to --hook CanCreate --module "$ZK_ELIG" >/dev/null
+inv "$ZK_COMPLIANCE" deployer add_module_to --hook CanTransfer --module "$ZK_ELIG" >/dev/null
+ZK_TOKEN=$(dep constella_demo_token --admin "$ADMIN" --compliance "$ZK_COMPLIANCE")
+stellar keys generate dave --network "$NET" --overwrite >/dev/null 2>&1 || stellar keys generate dave --network "$NET" >/dev/null 2>&1
+DAVE=$(key dave)
+inv "$IDZK" deployer register_commitment --account "$DAVE" --commitment "$COMMIT" >/dev/null
+inv "$IDZK" deployer prove_eligibility --account "$DAVE" --commitment "$COMMIT" --proof "$PROOFJSON" >/dev/null
+echo "  zkToken=$ZK_TOKEN"
+echo "  dave (ZK-eligible recipient)=$DAVE"
+
 echo "▸ Writing scripts/deployed.testnet.json…"
 cat > scripts/deployed.testnet.json <<JSON
 {
@@ -107,7 +120,11 @@ cat > scripts/deployed.testnet.json <<JSON
     "verifier": "$VERIFIER",
     "identityZk": "$IDZK",
     "commitment": "$COMMIT",
-    "proof": $PROOFJSON
+    "proof": $PROOFJSON,
+    "zkEligibility": "$ZK_ELIG",
+    "zkCompliance": "$ZK_COMPLIANCE",
+    "zkToken": "$ZK_TOKEN",
+    "dave": "$DAVE"
   }
 }
 JSON
