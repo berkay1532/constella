@@ -140,4 +140,18 @@ export async function submitTransfer(
   }
 }
 
+// --- ZK eligibility (Phase 2) ---
+
+type ZkInfo = { identityZk: string; commitment: string };
+const ZK = (deployed as { zk?: ZkInfo }).zk;
+export const hasZk = Boolean(ZK?.identityZk);
+
+/** Read the ZK identity provider's eligibility flag for an account. */
+export async function zkIsVerified(account: string): Promise<boolean> {
+  if (!ZK) return false;
+  const sim = await simulate(ZK.identityZk, 'is_verified', [addr(account)]);
+  if (rpc.Api.isSimulationError(sim)) return false;
+  return scValToNative(sim.result!.retval) === true;
+}
+
 export { deployed };

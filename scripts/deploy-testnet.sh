@@ -70,6 +70,18 @@ else
   echo "  ✅ reverted as expected (CountryRestrict)"
 fi
 
+echo "▸ Deploying ZK (verifier + identity-zk) + policy…"
+node_json() { node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);console.log($1)})"; }
+ZKARGS=$(cargo run --manifest-path tools/zk-encode/Cargo.toml --quiet 2>/dev/null)
+VKJSON=$(printf '%s' "$ZKARGS" | node_json "JSON.stringify(j.vk)")
+PROOFJSON=$(printf '%s' "$ZKARGS" | node_json "JSON.stringify(j.proof)")
+COMMIT=$(printf '%s' "$ZKARGS" | node_json "j.commitment_dec")
+VERIFIER=$(stellar contract deploy --wasm "$WASM/constella_zk_verifier.wasm" --source deployer --network "$NET" 2>/dev/null | tail -1)
+IDZK=$(dep constella_module_identity_zk --admin "$ADMIN" --verifier "$VERIFIER")
+inv "$IDZK" deployer set_policy --vk "$VKJSON" --allowed '[840,276]' >/dev/null
+echo "  verifier=$VERIFIER"
+echo "  identityZk=$IDZK"
+
 echo "▸ Writing scripts/deployed.testnet.json…"
 cat > scripts/deployed.testnet.json <<JSON
 {
@@ -90,6 +102,12 @@ cat > scripts/deployed.testnet.json <<JSON
     "alice": "$ALICE",
     "bob": "$BOB",
     "carol": "$CAROL"
+  },
+  "zk": {
+    "verifier": "$VERIFIER",
+    "identityZk": "$IDZK",
+    "commitment": "$COMMIT",
+    "proof": $PROOFJSON
   }
 }
 JSON
