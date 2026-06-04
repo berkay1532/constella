@@ -34,3 +34,6 @@ test_snapshots/
 
 # ZK build artifacts (ptau/zkey/r1cs/wasm/witness — regenerate via zk/build.sh)
 zk/build/
+
+# Instawards / SCF application drafts — local-only, never pushed
+instawards/
