@@ -2,13 +2,16 @@
 
 **Open-source, modular compliance infrastructure for Stellar RWA tokens (Soroban) — with a zero-knowledge privacy layer.**
 
+[![CI](https://github.com/berkay1532/constella/actions/workflows/ci.yml/badge.svg)](https://github.com/berkay1532/constella/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 Constella is a library of audit-ready, reusable **compliance modules** plus a **standard module interface** that plug into an OpenZeppelin/ERC-3643-style compliance engine. Issuers compose ready-made rules (holder caps, lock-ups, concentration limits, country restrictions, …) instead of hand-writing them — and can upgrade the identity check to a **zero-knowledge** one that proves an investor is eligible *without revealing their country*.
 
 > Modules = stars forming a compliance constellation. ✨
 
 - **Status:** MVP built & verified — `cargo test` green, all contracts build to wasm, the full stack runs live on Stellar testnet (real pass/revert), and a React demo signs real transfers with Freighter. Phase 2 (ZK) is implemented and wired into the demo.
 - **Repo:** `github.com/berkay1532/constella`
-- **Docs:** [PRD](docs/PRD-Constella.md) · [Architecture](docs/architecture.md) · [Decisions log](docs/DECISIONS.md) · [ZK notes](zk/README.md)
+- **Docs:** [PRD](docs/PRD-Constella.md) · [Architecture](docs/architecture.md) · [Decisions log](docs/DECISIONS.md) · [ZK notes](zk/README.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)
 
 ---
 

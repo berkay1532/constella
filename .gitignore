@@ -37,3 +37,6 @@ zk/build/
 
 # Instawards / SCF application drafts — local-only, never pushed
 instawards/
+
+# Personal files (not part of the project)
+background_cv.pdf
