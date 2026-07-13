@@ -70,6 +70,58 @@ else
   echo "  ✅ reverted as expected (CountryRestrict)"
 fi
 
+echo "▸ Deploying reference compliant token with the W2/W3 modules…"
+# A second, self-contained stack demonstrating Denylist + MaxInvestorsPerCountry
+# + TransferWindow, kept separate from the stack above so each module's pass/revert
+# is isolated.
+REF_COMPLIANCE=$(dep constella_compliance --admin "$ADMIN")
+DENYLIST=$(dep constella_module_denylist --admin "$ADMIN")
+INVESTORS=$(dep constella_module_max_investors_per_country --admin "$ADMIN" --identity "$IDENTITY" --cap 1)
+WINDOW=$(dep constella_module_transfer_window --admin "$ADMIN")
+REF_TOKEN=$(dep constella_demo_token --admin "$ADMIN" --compliance "$REF_COMPLIANCE")
+echo "  refCompliance=$REF_COMPLIANCE"; echo "  denylist=$DENYLIST"; echo "  investors=$INVESTORS (cap 1/country)"; echo "  window=$WINDOW"; echo "  refToken=$REF_TOKEN"
+
+echo "▸ Registering W2/W3 modules on hooks…"
+regref() { inv "$REF_COMPLIANCE" deployer add_module_to --hook "$1" --module "$2" >/dev/null; }
+# Denylist + TransferWindow are pure pre-checks.
+for h in CanCreate CanTransfer; do regref "$h" "$DENYLIST"; regref "$h" "$WINDOW"; done
+# MaxInvestorsPerCountry keeps a balance mirror → all five hooks from genesis.
+for h in CanCreate CanTransfer Created Transferred Destroyed; do regref "$h" "$INVESTORS"; done
+
+# frank = a second US recipient (mint-only, no funding needed) used for the cap demo.
+stellar keys generate frank --network "$NET" --overwrite >/dev/null 2>&1 || stellar keys generate frank --network "$NET" >/dev/null 2>&1 || true
+FRANK=$(key frank)
+inv "$IDENTITY" deployer set_country --account "$FRANK" --code 840 >/dev/null # US
+
+echo "▸ Mint 500 to alice on refToken (compliant)…"
+inv "$REF_TOKEN" deployer mint --to "$ALICE" --amount 500 >/dev/null && echo "  ✅ alice balance = $(inv "$REF_TOKEN" deployer balance --id "$ALICE")"
+
+echo "▸ MaxInvestorsPerCountry: mint to frank (2nd US holder, cap 1) should REVERT…"
+if inv "$REF_TOKEN" deployer mint --to "$FRANK" --amount 100 >/dev/null 2>&1; then
+  echo "  ❌ unexpectedly passed"
+else
+  echo "  ✅ reverted as expected (US at cap; count=$(inv "$INVESTORS" deployer count --country 840))"
+fi
+
+echo "▸ Denylist: block bob, transfer alice→bob should REVERT…"
+inv "$DENYLIST" deployer add_to_denylist --account "$BOB" >/dev/null
+if inv "$REF_TOKEN" alice transfer --from "$ALICE" --to "$BOB" --amount 50 >/dev/null 2>&1; then
+  echo "  ❌ unexpectedly passed"
+else
+  echo "  ✅ reverted as expected (bob denied)"
+fi
+inv "$DENYLIST" deployer remove_from_denylist --account "$BOB" >/dev/null
+
+echo "▸ TransferWindow: freeze the token, mint should REVERT…"
+inv "$WINDOW" deployer pause >/dev/null
+if inv "$REF_TOKEN" deployer mint --to "$ALICE" --amount 10 >/dev/null 2>&1; then
+  echo "  ❌ unexpectedly passed"
+else
+  echo "  ✅ reverted as expected (paused; is_paused=$(inv "$WINDOW" deployer is_paused))"
+fi
+inv "$WINDOW" deployer unpause >/dev/null
+echo "  ✅ unpaused"
+
 echo "▸ Deploying ZK (verifier + identity-zk) + policy…"
 node_json() { node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);console.log($1)})"; }
 ZKARGS=$(cargo run --manifest-path tools/zk-encode/Cargo.toml --quiet 2>/dev/null)
@@ -110,11 +162,19 @@ cat > scripts/deployed.testnet.json <<JSON
     "countryRestrict": "$COUNTRY",
     "token": "$TOKEN"
   },
+  "referenceToken": {
+    "compliance": "$REF_COMPLIANCE",
+    "denylist": "$DENYLIST",
+    "maxInvestorsPerCountry": "$INVESTORS",
+    "transferWindow": "$WINDOW",
+    "token": "$REF_TOKEN"
+  },
   "accounts": {
     "admin": "$ADMIN",
     "alice": "$ALICE",
     "bob": "$BOB",
-    "carol": "$CAROL"
+    "carol": "$CAROL",
+    "frank": "$FRANK"
   },
   "zk": {
     "verifier": "$VERIFIER",
