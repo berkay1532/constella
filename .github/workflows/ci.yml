@@ -32,7 +32,14 @@ jobs:
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
 
       - name: Coverage summary
-        run: cargo llvm-cov report --summary-only
+        run: |
+          cargo llvm-cov report --summary-only | tee coverage.txt
+          {
+            echo "### Coverage (cargo-llvm-cov)";
+            echo '```';
+            grep -E '^(Filename|-+|TOTAL)' coverage.txt || cat coverage.txt;
+            echo '```';
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
