@@ -499,6 +499,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "constella-module-max-investors-per-country"
+version = "0.1.0"
+dependencies = [
+ "constella-identity-mock",
+ "constella-module-interface",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "constella-module-zk-eligibility"
 version = "0.1.0"
 dependencies = [
