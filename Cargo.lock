@@ -447,6 +447,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "constella-module-denylist"
+version = "0.1.0"
+dependencies = [
+ "constella-module-interface",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "constella-module-identity-zk"
 version = "0.1.0"
 dependencies = [
