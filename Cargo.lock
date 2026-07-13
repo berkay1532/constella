@@ -508,6 +508,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "constella-module-transfer-window"
+version = "0.1.0"
+dependencies = [
+ "constella-module-interface",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "constella-module-zk-eligibility"
 version = "0.1.0"
 dependencies = [
