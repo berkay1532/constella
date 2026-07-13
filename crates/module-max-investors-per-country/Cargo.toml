@@ -1,0 +1,19 @@
+[package]
+name = "constella-module-max-investors-per-country"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+constella-module-interface = { path = "../module-interface" }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+constella-identity-mock = { path = "../identity-mock" }
