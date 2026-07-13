@@ -22,3 +22,6 @@ constella-module-max-holders = { path = "../module-max-holders" }
 constella-module-lockup = { path = "../module-lockup" }
 constella-module-max-balance = { path = "../module-max-balance" }
 constella-module-country-restrict = { path = "../module-country-restrict" }
+constella-module-denylist = { path = "../module-denylist" }
+constella-module-max-investors-per-country = { path = "../module-max-investors-per-country" }
+constella-module-transfer-window = { path = "../module-transfer-window" }

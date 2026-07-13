@@ -7,9 +7,14 @@ use constella_compliance::{Compliance, ComplianceClient};
 use constella_identity_mock::{IdentityMock, IdentityMockClient};
 use constella_module_country_restrict::CountryRestrictModule;
 use constella_module_interface::ComplianceHook;
+use constella_module_denylist::{DenylistModule, DenylistModuleClient};
 use constella_module_lockup::LockupModule;
 use constella_module_max_balance::MaxBalanceModule;
 use constella_module_max_holders::{MaxHoldersModule, MaxHoldersModuleClient};
+use constella_module_max_investors_per_country::{
+    MaxInvestorsPerCountryModule, MaxInvestorsPerCountryModuleClient,
+};
+use constella_module_transfer_window::{TransferWindowModule, TransferWindowModuleClient};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::{vec, Address, Env};
 
@@ -127,4 +132,111 @@ fn full_compliance_flow() {
     assert_eq!(token.balance(&eve), 0);
     assert_eq!(token.balance(&frank), 100);
     assert_eq!(token.total_supply(), 1200);
+}
+
+/// End-to-end integration for the Week 2/3 modules — Denylist,
+/// MaxInvestorsPerCountry, and TransferWindow — composed through the dispatcher
+/// on a single token. Exercises pass and revert paths for each, and confirms the
+/// AND-combined dispatcher denies as soon as any one module objects.
+#[test]
+fn new_modules_compliance_flow() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let alice = Address::generate(&env); // US
+    let bob = Address::generate(&env); // US
+    let carol = Address::generate(&env); // US
+    let dave = Address::generate(&env); // DE
+
+    // --- deploy identity provider + compliance engine ---
+    let identity = env.register(IdentityMock, (admin.clone(),));
+    let identity_c = IdentityMockClient::new(&env, &identity);
+    let compliance = env.register(Compliance, (admin.clone(),));
+    let compliance_c = ComplianceClient::new(&env, &compliance);
+
+    // --- deploy the three new modules ---
+    let denylist = env.register(DenylistModule, (admin.clone(),));
+    let denylist_c = DenylistModuleClient::new(&env, &denylist);
+    let investors = env.register(
+        MaxInvestorsPerCountryModule,
+        (admin.clone(), identity.clone(), 2u32), // cap 2 holders per country
+    );
+    let investors_c = MaxInvestorsPerCountryModuleClient::new(&env, &investors);
+    let window = env.register(TransferWindowModule, (admin.clone(),));
+    let window_c = TransferWindowModuleClient::new(&env, &window);
+
+    // --- deploy demo token wired to compliance ---
+    let token_id = env.register(DemoToken, (admin.clone(), compliance.clone()));
+    let token = DemoTokenClient::new(&env, &token_id);
+
+    // --- register modules on hooks ---
+    // Denylist + TransferWindow are pure pre-checks.
+    for m in [&denylist, &window] {
+        compliance_c.add_module_to(&ComplianceHook::CanCreate, m);
+        compliance_c.add_module_to(&ComplianceHook::CanTransfer, m);
+    }
+    // MaxInvestorsPerCountry maintains a mirror, so it needs all five hooks.
+    for h in [
+        ComplianceHook::CanCreate,
+        ComplianceHook::CanTransfer,
+        ComplianceHook::Created,
+        ComplianceHook::Transferred,
+        ComplianceHook::Destroyed,
+    ] {
+        compliance_c.add_module_to(&h, &investors);
+    }
+
+    // --- attestor sets identities ---
+    identity_c.set_country(&alice, &US);
+    identity_c.set_country(&bob, &US);
+    identity_c.set_country(&carol, &US);
+    identity_c.set_country(&dave, &DE);
+
+    // === TransferWindow: freeze halts an otherwise-valid mint ===
+    window_c.pause();
+    assert!(window_c.is_paused());
+    assert!(token.try_mint(&alice, &100).is_err()); // frozen
+    window_c.unpause();
+    token.mint(&alice, &100); // US holder 1
+
+    // === Denylist: blocks mint of a denied recipient ===
+    denylist_c.add_to_denylist(&dave);
+    assert!(denylist_c.is_denied(&dave));
+    assert!(token.try_mint(&dave, &100).is_err()); // dave denied
+    denylist_c.remove_from_denylist(&dave);
+    token.mint(&dave, &100); // DE holder 1
+
+    token.mint(&bob, &100); // US holder 2 -> US now at cap
+    assert_eq!(investors_c.count(&US), 2);
+    assert_eq!(investors_c.count(&DE), 1);
+
+    // === MaxInvestorsPerCountry: 3rd US holder denied ===
+    assert!(token.try_mint(&carol, &100).is_err()); // US full
+
+    // === Denylist: blocks a transfer to a denied recipient ===
+    denylist_c.add_to_denylist(&bob);
+    assert!(token.try_transfer(&alice, &bob, &50).is_err()); // bob denied
+    denylist_c.remove_from_denylist(&bob);
+
+    // === MaxInvestorsPerCountry: net-zero transfer lets carol replace alice ===
+    token.transfer(&alice, &carol, &100); // alice exits US, carol joins US
+    assert_eq!(token.balance(&alice), 0);
+    assert_eq!(token.balance(&carol), 100);
+    assert_eq!(investors_c.count(&US), 2); // still 2 (swap, not growth)
+
+    // === TransferWindow: a future-only window closes transfers now ===
+    window_c.set_window(&Some(1000), &None);
+    assert_eq!(window_c.window(), (Some(1000), None));
+    env.ledger().set_timestamp(500);
+    assert!(token.try_transfer(&bob, &carol, &10).is_err()); // before open_from
+    env.ledger().set_timestamp(1500);
+    token.transfer(&bob, &carol, &10); // window now open
+    assert_eq!(token.balance(&carol), 110);
+    assert_eq!(token.balance(&bob), 90);
+
+    // --- final state ---
+    assert_eq!(token.total_supply(), 300);
+    assert_eq!(investors_c.count(&US), 2);
+    assert_eq!(investors_c.count(&DE), 1);
 }

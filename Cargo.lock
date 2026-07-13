@@ -424,10 +424,13 @@ dependencies = [
  "constella-compliance",
  "constella-identity-mock",
  "constella-module-country-restrict",
+ "constella-module-denylist",
  "constella-module-interface",
  "constella-module-lockup",
  "constella-module-max-balance",
  "constella-module-max-holders",
+ "constella-module-max-investors-per-country",
+ "constella-module-transfer-window",
  "soroban-sdk",
 ]
 
