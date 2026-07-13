@@ -3,6 +3,7 @@
 **Open-source, modular compliance infrastructure for Stellar RWA tokens (Soroban) — with a zero-knowledge privacy layer.**
 
 [![CI](https://github.com/berkay1532/constella/actions/workflows/ci.yml/badge.svg)](https://github.com/berkay1532/constella/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-89%25%20lines-green.svg)](https://github.com/berkay1532/constella/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Constella is a library of audit-ready, reusable **compliance modules** plus a **standard module interface** that plug into an OpenZeppelin/ERC-3643-style compliance engine. Issuers compose ready-made rules (holder caps, lock-ups, concentration limits, country restrictions, …) instead of hand-writing them — and can upgrade the identity check to a **zero-knowledge** one that proves an investor is eligible *without revealing their country*.
@@ -11,7 +12,7 @@ Constella is a library of audit-ready, reusable **compliance modules** plus a **
 
 - **Status:** MVP built & verified — `cargo test` green, all contracts build to wasm, the full stack runs live on Stellar testnet (real pass/revert), and a React demo signs real transfers with Freighter. Phase 2 (ZK) is implemented and wired into the demo.
 - **Repo:** `github.com/berkay1532/constella`
-- **Docs:** [PRD](docs/PRD-Constella.md) · [Architecture](docs/architecture.md) · [Decisions log](docs/DECISIONS.md) · [ZK notes](zk/README.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)
+- **Docs:** [Quickstart](docs/quickstart.md) · [Testnet evidence](docs/evidence-testnet.md) · [PRD](docs/PRD-Constella.md) · [Architecture](docs/architecture.md) · [Decisions log](docs/DECISIONS.md) · [ZK notes](zk/README.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)
 
 ---
 
@@ -280,7 +281,7 @@ Network: **testnet** · RPC `https://soroban-testnet.stellar.org` · passphrase 
 | **frank** | [`GAPX3SAO…ASE366`](https://stellar.expert/explorer/testnet/account/GAPX3SAOA3MNKJTPG5JLDZKQAIQA3CINRJVE53QV72HZO4SJ47ASE366) | US — 2nd US holder used to trip the per-country investor cap |
 | **dave** | [`GBKJE4NQ…RRPSYH`](https://stellar.expert/explorer/testnet/account/GBKJE4NQUQSC7KWGD4I5TCVEZWJR3FBGJVD3D3GUYSHLXYZAIRRRPSYH) | ZK-eligible recipient (proven via on-chain Groth16; country stays private) |
 
-> Re-running the deploy script generates a fresh set of addresses.
+> Re-running the deploy script generates a fresh set of addresses. For a curated list of live pass/revert **transaction hashes** proving each new module on-chain, see [`docs/evidence-testnet.md`](docs/evidence-testnet.md) (regenerate with `bash scripts/capture-evidence.sh`).
 
 ---
 
