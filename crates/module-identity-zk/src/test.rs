@@ -120,3 +120,29 @@ fn rejects_unregistered_or_wrong_commitment() {
     assert_eq!(client.prove_eligibility(&investor, &wrong, &proof(&env)), false);
     assert_eq!(client.is_verified(&investor), false);
 }
+
+#[test]
+fn self_registration_then_prove() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, investor) = setup(&env);
+
+    // Holder self-registers their own commitment (no admin), then proves eligibility.
+    client.register_self(&investor, &commitment(&env));
+    let ok = client.prove_eligibility(&investor, &commitment(&env), &proof(&env));
+    assert_eq!(ok, true);
+    assert_eq!(client.is_verified(&investor), true);
+}
+
+#[test]
+#[should_panic]
+fn register_self_requires_account_auth() {
+    let env = Env::default();
+    // No mock_all_auths: account.require_auth() must reject the call.
+    let admin = Address::generate(&env);
+    let verifier = env.register(Groth16Verifier {}, ());
+    let id = env.register(IdentityZk, (admin, verifier));
+    let client = IdentityZkClient::new(&env, &id);
+    let investor = Address::generate(&env);
+    client.register_self(&investor, &U256::from_u32(&env, 42));
+}
