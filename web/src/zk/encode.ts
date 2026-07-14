@@ -1,6 +1,8 @@
 // TypeScript port of tools/zk-encode (arkworks uncompressed BLS12-381 layout).
-// Field elements are canonical big-endian (arkworks default); Fr is also big-endian.
-// Points are x||y (G1) and x.c0||x.c1||y.c0||y.c1 (G2), matching the Rust encoder field order.
+// Fq coordinates are big-endian (ZCash/IETF BLS12-381 standard, as arkworks
+// serialize_uncompressed emits); Fr is also big-endian. Points are x||y (G1). For G2,
+// each coordinate is an Fq2 element (c0 + c1*u) serialized imaginary-part (c1) first,
+// so the on-chain layout is x.c1 || x.c0 || y.c1 || y.c0.
 
 function beBytes(x: bigint, n: number): Uint8Array {
   const out = new Uint8Array(n);
@@ -30,9 +32,14 @@ export function g1(x: string, y: string): Uint8Array {
   return concat(be48(x), be48(y));
 }
 
-/** G2Affine uncompressed: x.c0 || x.c1 || y.c0 || y.c1 (each 48 BE) = 192 bytes. */
+/**
+ * G2Affine uncompressed = 192 bytes.
+ * Args are in snarkjs-natural order: x = c0(x0) + c1(x1)*u, y = c0(y0) + c1(y1)*u.
+ * Each Fq2 is serialized imaginary-part (c1) first, so the emitted layout is
+ * x.c1 || x.c0 || y.c1 || y.c0 (each 48 BE), matching the on-chain verifier.
+ */
 export function g2(x0: string, x1: string, y0: string, y1: string): Uint8Array {
-  return concat(be48(x0), be48(x1), be48(y0), be48(y1));
+  return concat(be48(x1), be48(x0), be48(y1), be48(y0));
 }
 
 /** Fr big-endian, 32 bytes. */
@@ -54,7 +61,7 @@ export interface SnarkProof {
 export function encodeProof(p: SnarkProof): { a: Uint8Array; b: Uint8Array; c: Uint8Array } {
   return {
     a: g1(p.pi_a[0], p.pi_a[1]),
-    b: g2(p.pi_b[0][1], p.pi_b[0][0], p.pi_b[1][1], p.pi_b[1][0]),
+    b: g2(p.pi_b[0][0], p.pi_b[0][1], p.pi_b[1][0], p.pi_b[1][1]),
     c: g1(p.pi_c[0], p.pi_c[1]),
   };
 }

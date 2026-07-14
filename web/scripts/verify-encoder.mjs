@@ -12,11 +12,12 @@ const beBytes = (x, n) => { const o = new Uint8Array(n); let v = x; for (let i=n
 const be48 = (d) => beBytes(BigInt(d), 48);
 const cat = (...ps) => { const t = ps.reduce((n,p)=>n+p.length,0); const o=new Uint8Array(t); let f=0; for(const p of ps){o.set(p,f);f+=p.length;} return o; };
 const g1 = (x,y) => cat(be48(x), be48(y));
-const g2 = (a,b,c,d) => cat(be48(a), be48(b), be48(c), be48(d));
+// G2 args are snarkjs-natural order (x0,x1,y0,y1); Fq2 is emitted imaginary-first (c1||c0).
+const g2 = (x0,x1,y0,y1) => cat(be48(x1), be48(x0), be48(y1), be48(y0));
 const hex = (u8) => Array.from(u8, b => b.toString(16).padStart(2,'0')).join('');
 
 const a = hex(g1(proof.pi_a[0], proof.pi_a[1]));
-const b = hex(g2(proof.pi_b[0][1], proof.pi_b[0][0], proof.pi_b[1][1], proof.pi_b[1][0]));
+const b = hex(g2(proof.pi_b[0][0], proof.pi_b[0][1], proof.pi_b[1][0], proof.pi_b[1][1]));
 const c = hex(g1(proof.pi_c[0], proof.pi_c[1]));
 
 const ok = a === golden.proof.a && b === golden.proof.b && c === golden.proof.c;
