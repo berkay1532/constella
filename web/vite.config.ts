@@ -86,4 +86,6 @@ function bootstrapPlugin(): PluginOption {
 
 export default defineConfig({
   plugins: [react(), bootstrapPlugin()],
+  define: { global: 'globalThis' },
+  optimizeDeps: { include: ['snarkjs'] },
 });
