@@ -54,6 +54,15 @@ impl IdentityZk {
             .set(&DataKey::Commitment(account), &commitment);
     }
 
+    /// Demo self-attestation: the holder registers their own commitment (wallet-authed).
+    /// Production keeps issuer attestation via `register_commitment`.
+    pub fn register_self(env: Env, account: Address, commitment: U256) {
+        account.require_auth();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Commitment(account), &commitment);
+    }
+
     /// Submit a proof that the account's committed (hidden) country is in the allowed
     /// set. Verifies the Groth16 proof against the registered commitment + policy, and
     /// marks the account eligible on success.

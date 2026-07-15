@@ -188,6 +188,8 @@ zk/build.sh:  circom (--prime bls12381) + snarkjs (powersoftau → groth16 setup
    • ~40M instructions (~40% of the 100M tx budget)
 ```
 
+**In-browser proving (client-side).** The eligibility proof is generated **in the holder's browser** — the private country never leaves the device and no server or admin is involved. `web/src/zk/prove.ts` runs `snarkjs.groth16.fullProve` against the served circuit `.wasm`/`.zkey`; `web/src/zk/encode.ts` is a TypeScript port of `tools/zk-encode` (byte-for-byte verified against the Rust output) that formats the proof for the contract; the holder then signs `register_self` + `prove_eligibility` with their own wallet. Verified end-to-end on testnet — a fresh browser-generated proof flips `is_verified` to `true` on-chain (`register_self` tx [`fceb3b23…`](https://stellar.expert/explorer/testnet/tx/fceb3b23461f50d866a3da48cefc3d5941465869199af31a1c1915c84965ba44), `prove_eligibility` tx [`8d2f42b8…`](https://stellar.expert/explorer/testnet/tx/8d2f42b8bafcbb9c380bece07d1e3ea0583dec6b5cd947c09d534f2d1459ed32)). Production hardening (trusted-setup ceremony, real KYC-attested commitments) is the focus of the next phase.
+
 ### 6.3 The ZK identity provider (`module-identity-zk`)
 
 Same `IdentityProvider` surface as the mock, but private:
@@ -242,44 +244,44 @@ Network: **testnet** · RPC `https://soroban-testnet.stellar.org` · passphrase 
 
 | Contract | Address | What it does |
 |---|---|---|
-| **demo-token** | [`CA6KFHFD…TQQIIM`](https://stellar.expert/explorer/testnet/contract/CA6KFHFDOGYROJ4HTJENNONDHVX4SEIMMFCWX3NQRFVOKOC4JNTQQIIM) | SEP-41-style permissioned RWA token; routes every mint/transfer through the dispatcher |
-| **compliance** | [`CADSZFKG…RDFD4I`](https://stellar.expert/explorer/testnet/contract/CADSZFKGJ3UAZEM3HO2YFRSHVF7VLCYSNAYB5YVOAQYIUOEYCPRDFD4I) | the dispatcher (engine): per-hook module registry, AND-combined pre-checks, fan-out post-events |
-| **identity-mock** | [`CASG7V3B…VCCRRG`](https://stellar.expert/explorer/testnet/contract/CASG7V3BPWUMZREGMEC6V25632HO7HUGYDAANBY2MH6FQNNUE2VCCRRG) | cleartext attestor — `country_of` / `is_verified` (Layer 1 identity) |
-| **module-country-restrict** | [`CCCD3N36…MOMFQM`](https://stellar.expert/explorer/testnet/contract/CCCD3N36JYPF4BMOJ62USDNNEWTSW4T3VCDNEGIROUMSQQWWKPMOMFQM) | recipient's country ∈ allowed (US, DE); reads the identity layer |
-| **module-max-holders** | [`CD2MYB46…RTV662`](https://stellar.expert/explorer/testnet/contract/CD2MYB46BWIGLQRYDNBZWSQLLF43S3UMJ4K6BLUKJKDASPLRMJRTV662) | ≤ 5 distinct holders; self-tracks a balance mirror from the event stream |
-| **module-max-balance** | [`CAN267YB…K27NPJ`](https://stellar.expert/explorer/testnet/contract/CAN267YBSXFPGMIINSPQLSCW2RX6Z7SRNE3NAZN6EPHCF4WFTQK27NPJ) | ≤ cap per holder; self-tracks a balance mirror |
-| **module-lockup** | [`CBHPVIL6…4L3QX4`](https://stellar.expert/explorer/testnet/contract/CBHPVIL6DHDQFENSRLFQKKBUCYZKXGSYZSARDFIVOZTLLYMWAJ4L3QX4) | no transfer for T seconds after acquiring (T = 0 in the demo) |
+| **demo-token** | [`CCYCMBQH…ZD4GAB`](https://stellar.expert/explorer/testnet/contract/CCYCMBQHIBE2VQRPZ437MX32OCQIZHK5RKW4G3VTFCUQFLRXQ7ZD4GAB) | SEP-41-style permissioned RWA token; routes every mint/transfer through the dispatcher |
+| **compliance** | [`CDUYCEJU…Y4VZO4`](https://stellar.expert/explorer/testnet/contract/CDUYCEJUVZY6GOLLCL3C5IWL6RE3HR3CX2KDP7BDEBSUGAAXVYY4VZO4) | the dispatcher (engine): per-hook module registry, AND-combined pre-checks, fan-out post-events |
+| **identity-mock** | [`CAU6PCZP…DFTASF`](https://stellar.expert/explorer/testnet/contract/CAU6PCZPMPG53X2CI62NBWBHIEU5YC5ILQ5VIR5KYD7ZVLWLR4DFTASF) | cleartext attestor — `country_of` / `is_verified` (Layer 1 identity) |
+| **module-country-restrict** | [`CCZIAQWQ…KBVRME`](https://stellar.expert/explorer/testnet/contract/CCZIAQWQ25DBQJPJOTQXZMXAKXKWQOT5SZFYUDVHNC6RAHO3D3KBVRME) | recipient's country ∈ allowed (US, DE); reads the identity layer |
+| **module-max-holders** | [`CBATUCBJ…QEZA23`](https://stellar.expert/explorer/testnet/contract/CBATUCBJAEAYIEMRYFNLIBOQVBC6I2DAJHXMYFJYPIQONV2SOZQEZA23) | ≤ 5 distinct holders; self-tracks a balance mirror from the event stream |
+| **module-max-balance** | [`CAU7VS7O…37FMWT`](https://stellar.expert/explorer/testnet/contract/CAU7VS7OU6ZSNKDA4SXCT5X6NOZHN3PSJEQDMPXE7QXNT3VFDS37FMWT) | ≤ cap per holder; self-tracks a balance mirror |
+| **module-lockup** | [`CCYALEX7…CZRE2O`](https://stellar.expert/explorer/testnet/contract/CCYALEX725WODLPA7KBCDUFSGEY256THIXHSWBLO5C4XT7QWALCZRE2O) | no transfer for T seconds after acquiring (T = 0 in the demo) |
 
 **Reference compliant token (W2/W3 modules — a second self-contained stack):**
 
 | Contract | Address | What it does |
 |---|---|---|
-| **reference token** | [`CBBYKZ3V…JTUSMZ`](https://stellar.expert/explorer/testnet/contract/CBBYKZ3VVEIEUNHPR2V6O7DRR3ASGVHRKRRQV3BZOG53QX7V2AJTUSMZ) | permissioned token wired to the three new modules; live pass/revert demonstrated on deploy |
-| **compliance** | [`CCRCD7OA…ZZU4IG`](https://stellar.expert/explorer/testnet/contract/CCRCD7OAYYGXL7KHHJHYSS4CGOG4TCGBDTLGLMVNLU4NXRG2PJZZU4IG) | second dispatcher instance for the reference token |
-| **module-denylist** | [`CCI5THGE…LQB3AF`](https://stellar.expert/explorer/testnet/contract/CCI5THGEMIJ34LCVNBESLQJ37HCCMSZJOO5HQAXUVNZ3SECSIMLQB3AF) | sanctions blocklist — deny if `from`/`to` is listed (blocked transfer reverts) |
-| **module-max-investors-per-country** | [`CBXZSPXH…IZV65J`](https://stellar.expert/explorer/testnet/contract/CBXZSPXH6PDASQTXYTJ3E4LV3NZJIB3G2GL5UKW4NWZVLWXDCLIZV65J) | ≤ 1 holder/country in the demo; a 2nd US holder reverts |
-| **module-transfer-window** | [`CALLFRPO…XMIF2D`](https://stellar.expert/explorer/testnet/contract/CALLFRPOMGN5NEZBU7JLJ6VD7MIAWJHF227VO7DXSSAE63R4IOXMIF2D) | freeze + time-window; `pause()` makes mint/transfer revert |
+| **reference token** | [`CCG5GNJT…3PZO4B`](https://stellar.expert/explorer/testnet/contract/CCG5GNJTSAMCZGR7ZQGSBRQCHPW6AZ2OQBRGCJWXJPIVEUTEMU3PZO4B) | permissioned token wired to the three new modules; live pass/revert demonstrated on deploy |
+| **compliance** | [`CAB6OWKH…6NKUYW`](https://stellar.expert/explorer/testnet/contract/CAB6OWKHEBYH25ZPC4FRYELQD3GHHY7Z3S7SMQRE6DJDXVISBW6NKUYW) | second dispatcher instance for the reference token |
+| **module-denylist** | [`CCSN74QS…STREYB`](https://stellar.expert/explorer/testnet/contract/CCSN74QSZG5GTQBPEVQI2A67BSYQJ5V7A6UBU2D24PS4BFUL3MSTREYB) | sanctions blocklist — deny if `from`/`to` is listed |
+| **module-max-investors-per-country** | [`CCQTLEBE…TYVOOB`](https://stellar.expert/explorer/testnet/contract/CCQTLEBEG2O2EZA5GGTVBF4FFOXIQQHTGRJLKAK54QY3D4A67ITYVOOB) | ≤ 1 holder/country in the demo; a 2nd US holder reverts |
+| **module-transfer-window** | [`CARJAMBT…EDG6KO`](https://stellar.expert/explorer/testnet/contract/CARJAMBTDIQXQHDVNYDUTXGYKSHSF773W66VZY7XS4PY5GBNAPEDG6KO) | freeze + time-window; `pause()` makes mint/transfer revert |
 
-**Zero-knowledge layer (Phase 2):**
+**Zero-knowledge layer (Phase 2 — proof generated in-browser):**
 
 | Contract | Address | What it does |
 |---|---|---|
-| **zk-verifier** | [`CAO6TFIF…B4GG5R`](https://stellar.expert/explorer/testnet/contract/CAO6TFIFXQK3QFLSVUU7VKDWTKVRNEECRTDPFF7ZRWBPTUSPBAB4GG5R) | Groth16 / BLS12-381 on-chain verifier (`pairing_check`) |
-| **module-identity-zk** | [`CCCNST66…C2OZO3`](https://stellar.expert/explorer/testnet/contract/CCCNST66TTF6KFNKKVQ7HAJIR3TWCSFWRJR2AFZVUAWJQ7PIPOC2OZO3) | ZK identity provider — proves country ∈ allowed, hidden; `country_of → none` |
-| **module-zk-eligibility** | [`CDF3GXVU…QSVOGU`](https://stellar.expert/explorer/testnet/contract/CDF3GXVUCOKQ4Q5UG4KAFA5DDH4WTOG2ZAPXTTCEXATYVWEGDDQSVOGU) | compliance module gating on the ZK `is_verified` flag — a boolean, no country read |
-| **compliance (ZK token)** | [`CANZ2GQW…NEFU5Y`](https://stellar.expert/explorer/testnet/contract/CANZ2GQWJX7IMNV56MDMA4JBZUOQEG6IPF44JJX3VTU4XWOJCONEFU5Y) | dispatcher instance wired to the ZK-eligibility module |
-| **zk-token** | [`CBISJIMZ…U77HUS`](https://stellar.expert/explorer/testnet/contract/CBISJIMZAQVRT7N26EQI3FVGDN6ATMTRXTTAL6VTTPE5ES7ZJ7U77HUS) | RWA token whose transfers gate on ZK eligibility (recipient privacy) |
+| **zk-verifier** | [`CC3E26EG…6H66XE`](https://stellar.expert/explorer/testnet/contract/CC3E26EGAYYA7A2K3RHXEYTIX4TCL7MTFSYTKQUKNKU3TZHEYS6H66XE) | Groth16 / BLS12-381 on-chain verifier (`pairing_check`) |
+| **module-identity-zk** | [`CDZDNLUK…UMWPOY`](https://stellar.expert/explorer/testnet/contract/CDZDNLUKIT3HOAO7ZL6EH7R4G5Q6QTUYM3DPK5QT6FM5GAPRBYUMWPOY) | ZK identity provider — `register_self` + `prove_eligibility`; proves country ∈ allowed, hidden |
+| **module-zk-eligibility** | [`CD73U4NS…CNU2WM`](https://stellar.expert/explorer/testnet/contract/CD73U4NSIA3DVVODWUSR6WVBITNZTYAFZQIKD7WYGV4WYBSMRFCNU2WM) | compliance module gating on the ZK `is_verified` flag |
+| **compliance (ZK token)** | [`CCXLNCQV…XTIBXO`](https://stellar.expert/explorer/testnet/contract/CCXLNCQVXZ7EREVMJSO3GAHTQ7ZQOPR2B43YLODBXA7OP7R3MLXTIBXO) | dispatcher instance wired to the ZK-eligibility module |
+| **zk-token** | [`CB5673SC…EQWBVE`](https://stellar.expert/explorer/testnet/contract/CB5673SCMIDVRAO7JA7367HIJO4WW5GM247QBKQJNATKKHVQL6EQWBVE) | RWA token whose transfers gate on ZK eligibility (recipient privacy) |
 
 **Demo accounts:**
 
 | Account | Address | Role |
 |---|---|---|
-| **deployer / admin** | [`GAZ6WN4H…7T73AK`](https://stellar.expert/explorer/testnet/account/GAZ6WN4HMD5GX7PIED4UVJTK6VK57DN435PPBN27LSSWWL2B4I7T73AK) | issuer / attestor (mints, sets identities) |
-| **alice** | [`GAIID5NG…STEZVY`](https://stellar.expert/explorer/testnet/account/GAIID5NGOYNY6YB53EFTAPBLJPQZ2ULTZJZIXAHC2TE6KPCD6PSTEZVY) | US — compliant holder |
-| **bob** | [`GC6VSO5E…LKEPN3`](https://stellar.expert/explorer/testnet/account/GC6VSO5E4WPXCGJANSUR37JESTHS27MBGFJOFQKIYV66X2RKXHLKEPN3) | DE — allowed recipient (transfer passes) |
-| **carol** | [`GBG5RKRU…SCACCL`](https://stellar.expert/explorer/testnet/account/GBG5RKRUG32IB7NXEGDCNV2HWX7QY7QRJKX6BHPJ6NYQEGUQF7SCACCL) | TR — disallowed (cleartext denial reveals TR; ZK denial does not) |
-| **frank** | [`GAPX3SAO…ASE366`](https://stellar.expert/explorer/testnet/account/GAPX3SAOA3MNKJTPG5JLDZKQAIQA3CINRJVE53QV72HZO4SJ47ASE366) | US — 2nd US holder used to trip the per-country investor cap |
-| **dave** | [`GBKJE4NQ…RRPSYH`](https://stellar.expert/explorer/testnet/account/GBKJE4NQUQSC7KWGD4I5TCVEZWJR3FBGJVD3D3GUYSHLXYZAIRRRPSYH) | ZK-eligible recipient (proven via on-chain Groth16; country stays private) |
+| **deployer / admin** | [`GDXK5YGK…W3VIFC`](https://stellar.expert/explorer/testnet/account/GDXK5YGKCYYQYIEGWQNVTQXN7MK6VDDCA5UV4ZYP7TWWEGTMVSW3VIFC) | issuer / attestor |
+| **alice** | [`GCDA5EJ4…C2U4LO`](https://stellar.expert/explorer/testnet/account/GCDA5EJ4HR5IOQ2GFGYEIE5FC7GUOA7XYSFS552TRSXHLIVNLAC2U4LO) | US — compliant holder |
+| **bob** | [`GBXBMWAK…6LJBJK`](https://stellar.expert/explorer/testnet/account/GBXBMWAK5UHXXV7QLFKPGBO2ZJQMFHYWPBFX7GW3NMHDYCU6NY6LJBJK) | DE — allowed recipient |
+| **carol** | [`GCABGRS5…FB5BZW`](https://stellar.expert/explorer/testnet/account/GCABGRS5ZDW2FSZQIGULCUTUW5W74RETDJZOVG6IJ4YHDCTLOTFB5BZW) | TR — disallowed |
+| **frank** | [`GAUKLVUW…AXEUZG`](https://stellar.expert/explorer/testnet/account/GAUKLVUWT6OILH3IC62Z7ELEFU7V7V7OTRRGSKLJWN77EAI6DSAXEUZG) | US — trips the per-country investor cap |
+| **dave** | [`GCZB5ZFV…4NUAUH`](https://stellar.expert/explorer/testnet/account/GCZB5ZFVGOBFWIYFLTASOWFLDMB7U2JUV6XPN36FRTQGPPCN3X4NUAUH) | ZK-eligible recipient (proven via on-chain Groth16) |
 
 > Re-running the deploy script generates a fresh set of addresses. For a curated list of live pass/revert **transaction hashes** proving each new module on-chain, see [`docs/evidence-testnet.md`](docs/evidence-testnet.md) (regenerate with `bash scripts/capture-evidence.sh`).
 

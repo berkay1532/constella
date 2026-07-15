@@ -6,6 +6,7 @@ import {
   nativeToScVal,
   scValToNative,
   BASE_FEE,
+  xdr,
 } from '@stellar/stellar-sdk';
 import deployed from './deployed.testnet.json';
 
@@ -182,5 +183,81 @@ export const submitZkTransfer = (from: string, to: string, amount: number, sign:
     sign,
     async () => 'Recipient is not ZK-eligible — their country is never revealed',
   );
+
+// --- ZK eligibility: client-side register_self + prove_eligibility (Freighter-signed) ---
+
+const u256 = (dec: string) => nativeToScVal(BigInt(dec), { type: 'u256' });
+
+// `xdr.ScVal.scvBytes` is typed as taking a Node `Buffer`, but this is a browser build with
+// no `@types/node` (and no `Buffer` global) — the underlying js-xdr writer accepts any
+// array-like of bytes at runtime, so pass the `Uint8Array` straight through and only cast
+// the static type (via `Parameters<>` so we never have to name the unavailable `Buffer` type).
+type ScvBytesArg = Parameters<typeof xdr.ScVal.scvBytes>[0];
+const scvBytes = (v: Uint8Array) => xdr.ScVal.scvBytes(v as unknown as ScvBytesArg);
+
+function proofScVal(a: Uint8Array, b: Uint8Array, c: Uint8Array) {
+  const entry = (k: string, v: xdr.ScVal) =>
+    new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol(k), val: v });
+  // A #[contracttype] struct serializes as a symbol-keyed ScMap sorted by key (a,b,c).
+  return xdr.ScVal.scvMap([entry('a', scvBytes(a)), entry('b', scvBytes(b)), entry('c', scvBytes(c))]);
+}
+
+async function signSendPoll(
+  unsignedTx: import('@stellar/stellar-sdk').Transaction,
+  sign: SignFn,
+  step: string,
+): Promise<string> {
+  const prepared = await server.prepareTransaction(unsignedTx);
+  const signedXDR = await sign(prepared.toXDR());
+  const sent = await server.sendTransaction(TransactionBuilder.fromXDR(signedXDR, NP));
+  if (sent.status === 'ERROR') throw new Error(`${step} submit error`);
+
+  // Poll to finality. Tolerate result-meta XDR parse hiccups exactly as `txTransfer` does: the
+  // tx is already submitted, so a parse exception is treated as "submitted" (hash returned) rather
+  // than a failure. Only a definitive non-SUCCESS status (FAILED, or NOT_FOUND after 20×1s) throws —
+  // so a doomed `register_self` aborts here, before we ask the wallet to sign `prove_eligibility`.
+  try {
+    let got = await server.getTransaction(sent.hash);
+    for (let i = 0; i < 20 && got.status === rpc.Api.GetTransactionStatus.NOT_FOUND; i++) {
+      await sleep(1000);
+      got = await server.getTransaction(sent.hash);
+    }
+    if (got.status !== rpc.Api.GetTransactionStatus.SUCCESS) {
+      throw new Error(`${step} did not succeed: ${got.status}`);
+    }
+  } catch (e) {
+    // Distinguish our own definitive-failure throw (re-throw it) from a result-meta parse hiccup
+    // (treat as submitted, return the hash) — mirroring `txTransfer`'s tolerance.
+    if (e instanceof Error && / did not succeed: /.test(e.message)) throw e;
+  }
+  return sent.hash;
+}
+
+/**
+ * Register the holder's own commitment and submit the browser-generated proof, both signed
+ * by the connected wallet. No admin/server involved. Returns the two tx hashes.
+ */
+export async function submitZkEligibility(
+  account: string,
+  commitmentDec: string,
+  proof: { a: Uint8Array; b: Uint8Array; c: Uint8Array },
+  sign: SignFn,
+): Promise<{ ok: boolean; registerHash: string; proveHash: string }> {
+  if (!ZK) throw new Error('ZK not deployed');
+  const acc1 = await server.getAccount(account);
+  const registerTx = buildFrom(acc1, ZK.identityZk, 'register_self', [addr(account), u256(commitmentDec)]);
+  const registerHash = await signSendPoll(registerTx, sign, 'register_self');
+
+  const acc2 = await server.getAccount(account);
+  const proveTx = buildFrom(acc2, ZK.identityZk, 'prove_eligibility', [
+    addr(account),
+    u256(commitmentDec),
+    proofScVal(proof.a, proof.b, proof.c),
+  ]);
+  const proveHash = await signSendPoll(proveTx, sign, 'prove_eligibility');
+
+  const ok = await zkIsVerified(account);
+  return { ok, registerHash, proveHash };
+}
 
 export { deployed };
