@@ -10,12 +10,12 @@ import {
   zkIsVerified,
   hasZk,
   zkDave,
+  submitZkEligibility,
   type SendResult,
 } from './stellar';
 import { connectWallet, currentAddress, signXDR } from './freighter';
 import { generateProof, IneligibleError } from './zk/prove';
 import { encodeProof } from './zk/encode';
-import { submitZkEligibility } from './stellar';
 
 const EXPLORER = 'https://stellar.expert/explorer/testnet';
 const cLink = (id: string) => `${EXPLORER}/contract/${id}`;
@@ -136,8 +136,12 @@ export function App() {
       const { proof, commitment } = await generateProof(zkCountry, secret);
       const bytes = encodeProof(proof);
       const res = await submitZkEligibility(wallet, commitment, bytes, (xdr) => signXDR(xdr, wallet));
-      setZkHash(res.proveHash);
-      setZkVerified(res.ok);
+      if (res.ok) {
+        setZkHash(res.proveHash);
+        setZkVerified(true);
+      } else {
+        setError('Proof did not verify on-chain.');
+      }
     } catch (e) {
       if (e instanceof IneligibleError) {
         setZkDenied(true);
