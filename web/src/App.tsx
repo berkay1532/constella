@@ -13,6 +13,9 @@ import {
   type SendResult,
 } from './stellar';
 import { connectWallet, currentAddress, signXDR } from './freighter';
+import { generateProof, IneligibleError } from './zk/prove';
+import { encodeProof } from './zk/encode';
+import { submitZkEligibility } from './stellar';
 
 const EXPLORER = 'https://stellar.expert/explorer/testnet';
 const cLink = (id: string) => `${EXPLORER}/contract/${id}`;
@@ -42,6 +45,13 @@ const ZK_RECIPIENTS = [
   { addr: deployed.accounts.carol, label: 'Carol', flag: '🔴', note: 'not ZK-eligible — country hidden' },
 ];
 
+const ZK_COUNTRIES = [
+  { code: 840, flag: '🇺🇸', label: 'United States (allowed)' },
+  { code: 276, flag: '🇩🇪', label: 'Germany (allowed)' },
+  { code: 792, flag: '🇹🇷', label: 'Turkey (not allowed)' },
+  { code: 250, flag: '🇫🇷', label: 'France (not allowed)' },
+];
+
 export function App() {
   const [supply, setSupply] = useState('…');
   const [holders, setHolders] = useState('…');
@@ -56,6 +66,8 @@ export function App() {
   const [zkBal, setZkBal] = useState('—');
   const [zkBusy2, setZkBusy2] = useState('');
   const [zkSendRes, setZkSendRes] = useState<(SendResult & { to: string }) | null>(null);
+  const [zkCountry, setZkCountry] = useState(840);
+  const [zkDenied, setZkDenied] = useState(false);
 
   const holderRows = wallet
     ? [{ addr: wallet, label: 'You', flag: '👛', country: 'US' }, ...BASE_HOLDERS]
@@ -117,15 +129,21 @@ export function App() {
   async function onProveZk() {
     if (!wallet) return;
     setError('');
+    setZkDenied(false);
     setZkBusy(true);
     try {
-      const r = await fetch(`/api/zk-prove?addr=${wallet}`);
-      const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'zk proof failed');
-      setZkHash(j.hash || '');
-      setZkVerified(await zkIsVerified(wallet));
+      const secret = BigInt('0x' + crypto.getRandomValues(new Uint8Array(8)).reduce((s, b) => s + b.toString(16).padStart(2, '0'), ''));
+      const { proof, commitment } = await generateProof(zkCountry, secret);
+      const bytes = encodeProof(proof);
+      const res = await submitZkEligibility(wallet, commitment, bytes, (xdr) => signXDR(xdr, wallet));
+      setZkHash(res.proveHash);
+      setZkVerified(res.ok);
     } catch (e) {
-      setError(String((e as Error).message || e));
+      if (e instanceof IneligibleError) {
+        setZkDenied(true);
+      } else {
+        setError(String((e as Error).message || e));
+      }
     } finally {
       setZkBusy(false);
     }
@@ -304,13 +322,28 @@ export function App() {
             </span>
           </div>
           {!zkVerified ? (
-            <button onClick={onProveZk} disabled={zkBusy}>
-              {zkBusy ? 'Verifying proof on-chain…' : 'Prove eligibility (zero-knowledge)'}
-            </button>
+            <>
+              <div className="row">
+                <span className="muted">Your country (private)</span>
+                <select value={zkCountry} onChange={(e) => setZkCountry(Number(e.target.value))}>
+                  {ZK_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.flag} {c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={onProveZk} disabled={zkBusy}>
+                {zkBusy ? 'Generating proof in your browser…' : 'Prove eligibility (zero-knowledge)'}
+              </button>
+              {zkDenied && (
+                <div className="result denied">
+                  ❌ Not eligible — and the app never learned or transmitted your country.
+                </div>
+              )}
+            </>
           ) : (
             zkHash && (
               <div className="result ok">
-                ✅ Proof verified on-chain — country stayed private —{' '}
+                ✅ Proof generated in your browser & verified on-chain — country stayed private —{' '}
                 <a href={txLink(zkHash)} target="_blank" rel="noreferrer">view tx ↗</a>
               </div>
             )
