@@ -7,9 +7,13 @@
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
+#[cfg(test)]
+mod test;
+
 #[contracttype]
 enum DataKey {
     Admin,
+    Dispatcher,
     Duration,
     Acquired(Address),
 }
@@ -19,8 +23,11 @@ pub struct LockupModule;
 
 #[contractimpl]
 impl LockupModule {
-    pub fn __constructor(env: Env, admin: Address, lock_seconds: u64) {
+    pub fn __constructor(env: Env, admin: Address, dispatcher: Address, lock_seconds: u64) {
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::Dispatcher, &dispatcher);
         env.storage().instance().set(&DataKey::Duration, &lock_seconds);
     }
 
@@ -64,10 +71,12 @@ impl LockupModule {
     }
 
     pub fn transferred(env: Env, _from: Address, to: Address, _amount: i128, _token: Address) {
+        Self::require_dispatcher(&env);
         Self::record(&env, &to);
     }
 
     pub fn created(env: Env, to: Address, _amount: i128, _token: Address) {
+        Self::require_dispatcher(&env);
         Self::record(&env, &to);
     }
 
@@ -75,6 +84,11 @@ impl LockupModule {
 }
 
 impl LockupModule {
+    fn require_dispatcher(env: &Env) {
+        let d: Address = env.storage().instance().get(&DataKey::Dispatcher).unwrap();
+        d.require_auth();
+    }
+
     fn record(env: &Env, who: &Address) {
         let now = env.ledger().timestamp();
         env.storage()

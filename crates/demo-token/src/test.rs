@@ -42,9 +42,12 @@ fn full_compliance_flow() {
     let compliance_c = ComplianceClient::new(&env, &compliance);
 
     // --- deploy modules ---
-    let max_holders = env.register(MaxHoldersModule, (admin.clone(), 3u32)); // cap 3 holders
-    let lockup = env.register(LockupModule, (admin.clone(), 100u64)); // 100s lock
-    let max_balance = env.register(MaxBalanceModule, (admin.clone(), 1000i128)); // cap 1000/holder
+    let max_holders = env.register(MaxHoldersModule, (admin.clone(), compliance.clone(), 3u32)); // cap 3 holders
+    let lockup = env.register(LockupModule, (admin.clone(), compliance.clone(), 100u64)); // 100s lock
+    let max_balance = env.register(
+        MaxBalanceModule,
+        (admin.clone(), compliance.clone(), 1000i128),
+    ); // cap 1000/holder
     let country = env.register(
         CountryRestrictModule,
         (admin.clone(), identity.clone(), vec![&env, US, DE]),
@@ -160,7 +163,7 @@ fn new_modules_compliance_flow() {
     let denylist_c = DenylistModuleClient::new(&env, &denylist);
     let investors = env.register(
         MaxInvestorsPerCountryModule,
-        (admin.clone(), identity.clone(), 2u32), // cap 2 holders per country
+        (admin.clone(), compliance.clone(), identity.clone(), 2u32), // cap 2 holders per country
     );
     let investors_c = MaxInvestorsPerCountryModuleClient::new(&env, &investors);
     let window = env.register(TransferWindowModule, (admin.clone(),));

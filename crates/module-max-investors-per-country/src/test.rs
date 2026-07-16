@@ -20,11 +20,12 @@ fn setup(cap: u32) -> Fixture<'static> {
     let env = Env::default();
     env.mock_all_auths();
     let admin = Address::generate(&env);
+    let dispatcher = Address::generate(&env);
     let id = env.register(IdentityMock, (admin.clone(),));
     let identity = IdentityMockClient::new(&env, &id);
     let m = env.register(
         MaxInvestorsPerCountryModule,
-        (admin.clone(), id.clone(), cap),
+        (admin.clone(), dispatcher, id.clone(), cap),
     );
     let module = MaxInvestorsPerCountryModuleClient::new(&env, &m);
     let token = Address::generate(&env);
@@ -64,10 +65,28 @@ fn set_cap_requires_admin() {
     // authorization on `set_cap` is actually required.
     let env = Env::default();
     let admin = Address::generate(&env);
+    let dispatcher = Address::generate(&env);
     let id = env.register(IdentityMock, (admin.clone(),));
-    let m = env.register(MaxInvestorsPerCountryModule, (admin, id, 3u32));
+    let m = env.register(MaxInvestorsPerCountryModule, (admin, dispatcher, id, 3u32));
     let module = MaxInvestorsPerCountryModuleClient::new(&env, &m);
     module.set_cap(&5); // no admin auth provided → must panic
+}
+
+// A spoofer (arbitrary account, NOT the dispatcher) must not be able to drive a
+// post-event directly. We do NOT mock the dispatcher's auth, so require_auth() on
+// `dispatcher` must reject.
+#[test]
+#[should_panic]
+fn created_rejects_non_dispatcher_caller() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let dispatcher = Address::generate(&env);
+    let id = env.register(IdentityMock, (admin.clone(),));
+    let m = env.register(MaxInvestorsPerCountryModule, (admin, dispatcher, id, 10u32));
+    let module = MaxInvestorsPerCountryModuleClient::new(&env, &m);
+    let who = Address::generate(&env);
+    // No auth for `dispatcher` -> require_dispatcher() must panic.
+    module.created(&who, &100, &Address::generate(&env));
 }
 
 #[test]
