@@ -19,8 +19,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview, clippy
+          targets: wasm32v1-none
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: Build contract wasm (hub/factory tests contractimport! these)
+        run: cargo build --workspace --release --target wasm32v1-none
 
       - name: Clippy (non-blocking lints)
         run: cargo clippy --workspace --all-targets
