@@ -9,6 +9,9 @@
 use constella_module_interface::{ComplianceError, ComplianceHook, ModuleClient};
 use soroban_sdk::{contract, contractimpl, contracttype, panic_with_error, Address, Env, Vec};
 
+#[cfg(test)]
+mod test;
+
 #[contracttype]
 enum DataKey {
     Admin,
@@ -96,6 +99,7 @@ impl Compliance {
     }
 
     pub fn transferred(env: Env, from: Address, to: Address, amount: i128, token: Address) {
+        token.require_auth();
         let mods = Self::get_modules_for_hook(env.clone(), ComplianceHook::Transferred);
         for m in mods.iter() {
             ModuleClient::new(&env, &m).transferred(&from, &to, &amount, &token);
@@ -103,6 +107,7 @@ impl Compliance {
     }
 
     pub fn created(env: Env, to: Address, amount: i128, token: Address) {
+        token.require_auth();
         let mods = Self::get_modules_for_hook(env.clone(), ComplianceHook::Created);
         for m in mods.iter() {
             ModuleClient::new(&env, &m).created(&to, &amount, &token);
@@ -110,6 +115,7 @@ impl Compliance {
     }
 
     pub fn destroyed(env: Env, from: Address, amount: i128, token: Address) {
+        token.require_auth();
         let mods = Self::get_modules_for_hook(env.clone(), ComplianceHook::Destroyed);
         for m in mods.iter() {
             ModuleClient::new(&env, &m).destroyed(&from, &amount, &token);
