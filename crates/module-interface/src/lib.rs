@@ -99,3 +99,28 @@ pub trait CountryRestrictAdmin {
     fn allowed(env: Env, token: Address) -> Vec<u32>;
     fn identity(env: Env, token: Address) -> Address;
 }
+
+/// Config surface of the multi-tenant MaxHolders module, called by the hub. Token-keyed.
+#[contractclient(name = "MaxHoldersClient")]
+pub trait MaxHoldersAdmin {
+    fn set_max(env: Env, token: Address, cap: u32);
+    fn max(env: Env, token: Address) -> u32;
+    fn holders(env: Env, token: Address) -> u32;
+}
+
+/// Config surface of the multi-tenant Lockup module, called by the hub. Token-keyed.
+#[contractclient(name = "LockupClient")]
+pub trait LockupAdmin {
+    fn set_duration(env: Env, token: Address, secs: u64);
+    fn unlock_at(env: Env, token: Address, holder: Address) -> u64;
+}
+
+/// Config surface of the multi-tenant TransferWindow module, called by the hub. Token-keyed.
+#[contractclient(name = "TransferWindowClient")]
+pub trait TransferWindowAdmin {
+    fn pause(env: Env, token: Address);
+    fn unpause(env: Env, token: Address);
+    fn set_window(env: Env, token: Address, open_from: Option<u64>, open_until: Option<u64>);
+    fn is_paused(env: Env, token: Address) -> bool;
+    fn window(env: Env, token: Address) -> (Option<u64>, Option<u64>);
+}
