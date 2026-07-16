@@ -435,6 +435,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "constella-hub"
+version = "0.1.0"
+dependencies = [
+ "constella-module-interface",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "constella-hub-module-denylist"
 version = "0.1.0"
 dependencies = [
