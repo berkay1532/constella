@@ -40,7 +40,7 @@ All three require the platform admin's auth.
 ## `launch`: one-signature token deployment
 
 ```
-launch(config: LaunchConfig { admin, denylist, max_balance, country_restrict }) -> LaunchResult { token }
+launch(config: LaunchConfig { admin, denylist, max_balance, country_restrict, max_holders, lockup, transfer_window }) -> LaunchResult { token }
 ```
 
 Requires only `config.admin.require_auth()` — the new issuer's signature. It:
@@ -61,6 +61,19 @@ Requires only `config.admin.require_auth()` — the new issuer's signature. It:
    registers the shared `country_restrict` module against `CanCreate` and `CanTransfer`, then
    calls `CountryRestrictClient::configure(token, identity, country_restrict)` to point the
    shared module at this token's fresh identity and allow-list in one call.
+6. If `max_holders > 0` (0 means "not selected"), registers the shared MaxHolders module
+   against **all 5 hooks** (same reasoning as MaxBalance: it needs the post-events to keep its
+   per-token holder count in sync), then calls `MaxHoldersClient::set_max(token, max_holders)`
+   to initialize that token's holder cap.
+7. If `lockup > 0` (0 means "not selected"), registers the shared Lockup module against
+   `CanTransfer`, `Created`, and `Transferred` (it only needs to record acquisition time on
+   mint/transfer-in and check it on transfer-out — no `CanCreate`/`Destroyed` gating), then
+   calls `LockupClient::set_duration(token, lockup)` to initialize that token's lock duration.
+8. If `transfer_window` is `true`, registers the shared TransferWindow module against
+   `CanCreate` and `CanTransfer` only — it is a pure pre-check gate (pause/window state), so it
+   needs no post-event hooks. No config call is made at launch: a fresh registration starts
+   unpaused with an all-time-open window; the issuer opts into pausing/windowing later via the
+   forwarders below.
 
 ## Per-token identity model
 
@@ -107,7 +120,7 @@ fan-out above) go through a single `mod hooks { pub const CAN_CREATE: &str = ...
 `src/lib.rs` — never a raw string literal at either call site. This closes off a whole class of
 "registered under a typo'd hook name, so it's silently never invoked" bugs.
 
-## Issuer forwarders (denylist, MaxBalance)
+## Issuer forwarders (denylist, MaxBalance, CountryRestrict, MaxHolders, Lockup, TransferWindow)
 
 The hub also forwards issuer-gated writes to the shared modules, so an issuer never needs to
 hold a module's address or auth directly:
@@ -124,20 +137,39 @@ hold a module's address or auth directly:
   the shared country-restrict module via `CountryRestrictClient::set_allowed` to change that
   token's allow-list after launch. (Attestation itself is not forwarded — see "Per-token
   identity model" above; the issuer calls the identity instance directly.)
+- `set_max_holders(token, cap)` — requires `TokenAdmin(token).require_auth()`, then calls the
+  shared MaxHolders module via `MaxHoldersClient::set_max` to change that token's holder cap
+  after launch.
+- `max_holders(token) -> u32` / `holders(token) -> u32` — unauthenticated read passthroughs
+  (configured cap / current holder count).
+- `set_lockup(token, secs)` — requires `TokenAdmin(token).require_auth()`, then calls the
+  shared Lockup module via `LockupClient::set_duration` to change that token's lock duration
+  after launch.
+- `unlock_at(token, holder) -> u64` — unauthenticated read passthrough (ledger timestamp at
+  which that holder's tokens unlock; `0` if never acquired).
+- `pause(token)` / `unpause(token)` — require `TokenAdmin(token).require_auth()`, then call the
+  shared TransferWindow module via `TransferWindowClient` to freeze/unfreeze that token
+  immediately, independent of any configured window.
+- `set_window(token, open_from, open_until)` — requires `TokenAdmin(token).require_auth()`,
+  then calls `TransferWindowClient::set_window` to (re)configure that token's open interval.
+- `is_paused(token) -> bool` / `transfer_window(token) -> (Option<u64>, Option<u64>)` —
+  unauthenticated read passthroughs.
 
 This is the hub's single auth surface for per-token module administration: each module itself
-(`hub-module-denylist`, `hub-module-max-balance`, `hub-module-country-restrict`) trusts only
-the hub's own `require_auth()` (see their READMEs), and the hub gates that trust per-token via
+(`hub-module-denylist`, `hub-module-max-balance`, `hub-module-country-restrict`,
+`hub-module-max-holders`, `hub-module-lockup`, `hub-module-transfer-window`) trusts only the
+hub's own `require_auth()` (see their READMEs), and the hub gates that trust per-token via
 `TokenAdmin`. All forwarder families resolve their module address through the same private
 `module_addr(env, kind)` helper — a single lookup shared by every module kind, rather than one
 hand-written accessor per module.
 
 ## Build-order note
 
-Hub tests `contractimport!` the built token, denylist, max-balance, country-restrict, and
-identity-mock Wasm (see `src/test.rs`), so `stellar contract build` must run **before**
-`cargo test -p constella-hub` — a plain `cargo test` against stale or missing Wasm artifacts
-will fail to compile the test module or exercise stale contract code:
+Hub tests `contractimport!` the built token, denylist, max-balance, country-restrict,
+identity-mock, max-holders, lockup, and transfer-window Wasm (see `src/test.rs`), so
+`stellar contract build` must run **before** `cargo test -p constella-hub` — a plain
+`cargo test` against stale or missing Wasm artifacts will fail to compile the test module or
+exercise stale contract code:
 
 ```bash
 stellar contract build
@@ -147,12 +179,13 @@ cargo test -p constella-hub
 ## Dependencies
 
 The hub depends only on `constella-module-interface` (`ModuleClient`, `DenylistClient`,
-`MaxBalanceClient`, `CountryRestrictClient`) for cross-contract calls — never on a concrete
-module or token `#[contract]` crate. This keeps the hub decoupled from every module's
-implementation; it only needs the shared ABI. The per-token identity instances the hub
-deploys (see "Per-token identity model" above) are likewise reached only by `Address`
-(`deploy_v2` against a platform-configured Wasm hash) — the hub never depends on the
-identity-mock `#[contract]` crate either.
+`MaxBalanceClient`, `CountryRestrictClient`, `MaxHoldersClient`, `LockupClient`,
+`TransferWindowClient`) for cross-contract calls — never on a concrete module or token
+`#[contract]` crate. This keeps the hub decoupled from every module's implementation; it only
+needs the shared ABI. The per-token identity instances the hub deploys (see "Per-token identity
+model" above) are likewise reached only by `Address` (`deploy_v2` against a
+platform-configured Wasm hash) — the hub never depends on the identity-mock `#[contract]` crate
+either.
 
 ## Live testnet evidence — one-signature launch
 
@@ -174,3 +207,9 @@ The per-token identity mechanic enforces a country allow-list live:
 - **One-signature launch** (allow US=840): tx [`0778f025…`](https://stellar.expert/explorer/testnet/tx/0778f0252bb7ea88a472f6469fffd22717ab9582cf282ad30cdaef023af23cd6) → token `CDNKCDLQ6MJBS7AOTA6RWWJNCTSLF7KWTRDQ4UTDQQKCWG7BWSOXRBKU`.
 - The hub deployed a **dedicated identity provider for that token**, read back via `hub.identity(token)` → `CA4QS7SNEAJZIMF22IXCPEXLPFRTHSP3ZGDQF74QOTLKVKRGIBGTWLFY`. The issuer (its admin) attested `alice = US(840)` and `carol = TR(792)` directly on it.
 - Minting to alice passed (US ∈ {US}); minting to carol **reverted** (TR ∉ {US}) — CountryRestrict enforced live, reading each token's own identity.
+
+## Live testnet evidence — MaxHolders + TransferWindow
+
+Both enforce per token, live, from one launch:
+- **One-signature launch** (`max_holders: 1, transfer_window: true`): tx [`849d7b3d…`](https://stellar.expert/explorer/testnet/tx/849d7b3dc1261b2824df61b4fa23f8afcc9feb05b14fd3d3f1cc85770daff701).
+- Minting a 1st holder passed (`holders = 1`); minting a 2nd holder **reverted** (MaxHolders cap 1). Then `hub.pause(token)` (`is_paused = true`) made a mint **revert** (frozen), and `hub.unpause(token)` let it pass again — the shared modules enforce and the issuer's forwarders drive per-token config, live.
