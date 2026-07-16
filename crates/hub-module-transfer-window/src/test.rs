@@ -28,7 +28,7 @@ fn pause_and_window_isolated_per_token() {
     env.ledger().set_timestamp(50);
     assert!(!m.can_transfer(&x, &x, &1, &ta)); // before open_from on A
     assert!(m.can_transfer(&x, &x, &1, &tb));  // B has no window
-    assert_eq!(m.is_paused(&ta), false);
+    assert!(!m.is_paused(&ta));
     assert_eq!(m.window(&ta), (Some(100), None));
 }
 
