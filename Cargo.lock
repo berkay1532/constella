@@ -443,6 +443,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "constella-hub-module-country-restrict"
+version = "0.1.0"
+dependencies = [
+ "constella-identity-mock",
+ "constella-module-interface",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "constella-hub-module-denylist"
 version = "0.1.0"
 dependencies = [

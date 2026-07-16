@@ -3,7 +3,9 @@
 //! a per-(token,hook) registry of shared module addresses, and a one-signature `launch`
 //! that deploys the token (pointed at this hub) and wires the selected shared modules.
 
-use constella_module_interface::{DenylistClient, MaxBalanceClient, ModuleClient};
+use constella_module_interface::{
+    CountryRestrictClient, DenylistClient, MaxBalanceClient, ModuleClient,
+};
 use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, BytesN, Env, Symbol, Vec};
 
 #[cfg(test)]
@@ -25,7 +27,8 @@ mod hooks {
 pub struct LaunchConfig {
     pub admin: Address,
     pub denylist: bool,
-    pub max_balance: i128, // 0 = not selected
+    pub max_balance: i128,          // 0 = not selected
+    pub country_restrict: Vec<u32>, // empty = not selected
 }
 
 #[contracttype]
@@ -38,10 +41,12 @@ pub struct LaunchResult {
 enum DataKey {
     PlatformAdmin,
     TokenWasm,
+    IdentityWasm,
     ModuleAddr(Symbol), // shared module address by kind
     Counter,
     TokenAdmin(Address),      // token -> issuer
     Modules(Address, Symbol), // (token, hook) -> Vec<Address>
+    Identity(Address),        // token -> its own per-token identity instance
 }
 
 #[contract]
@@ -58,6 +63,11 @@ impl Hub {
     pub fn set_token_wasm(env: Env, hash: BytesN<32>) {
         Self::require_platform_admin(&env);
         env.storage().instance().set(&DataKey::TokenWasm, &hash);
+    }
+
+    pub fn set_identity_wasm(env: Env, hash: BytesN<32>) {
+        Self::require_platform_admin(&env);
+        env.storage().instance().set(&DataKey::IdentityWasm, &hash);
     }
 
     pub fn set_module_addr(env: Env, kind: Symbol, addr: Address) {
@@ -110,6 +120,26 @@ impl Hub {
                 Self::register(&env, &token, &Symbol::new(&env, h), &m);
             }
             MaxBalanceClient::new(&env, &m).set_max(&token, &config.max_balance);
+        }
+        if !config.country_restrict.is_empty() {
+            let identity_hash: BytesN<32> = env
+                .storage()
+                .instance()
+                .get(&DataKey::IdentityWasm)
+                .unwrap();
+            let identity = Self::deploy(&env, &identity_hash, (config.admin.clone(),));
+            env.storage()
+                .persistent()
+                .set(&DataKey::Identity(token.clone()), &identity);
+            let m = Self::module_addr(&env, "country_restrict");
+            for h in [hooks::CAN_CREATE, hooks::CAN_TRANSFER] {
+                Self::register(&env, &token, &Symbol::new(&env, h), &m);
+            }
+            CountryRestrictClient::new(&env, &m).configure(
+                &token,
+                &identity,
+                &config.country_restrict,
+            );
         }
         LaunchResult { token }
     }
@@ -206,6 +236,17 @@ impl Hub {
     }
     pub fn max_balance(env: Env, token: Address) -> i128 {
         MaxBalanceClient::new(&env, &Self::module_addr(&env, "max_balance")).max(&token)
+    }
+    pub fn identity(env: Env, token: Address) -> Address {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Identity(token))
+            .unwrap()
+    }
+    pub fn set_country_allow(env: Env, token: Address, codes: Vec<u32>) {
+        Self::require_token_admin(&env, &token);
+        CountryRestrictClient::new(&env, &Self::module_addr(&env, "country_restrict"))
+            .set_allowed(&token, &codes);
     }
 }
 

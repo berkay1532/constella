@@ -7,7 +7,7 @@
 //! dispatcher and modules use to call one another. Mirrors OpenZeppelin's
 //! `ComplianceHook` surface so modules are portable to the OZ dispatcher.
 
-use soroban_sdk::{contractclient, contracterror, contracttype, Address, Env};
+use soroban_sdk::{contractclient, contracterror, contracttype, Address, Env, Vec};
 
 /// Hook points the compliance dispatcher exposes. A module registers against one
 /// or more hooks; the dispatcher only invokes a module on the hooks it registered for.
@@ -89,4 +89,13 @@ pub trait DenylistAdmin {
 pub trait MaxBalanceAdmin {
     fn set_max(env: Env, token: Address, cap: i128);
     fn max(env: Env, token: Address) -> i128;
+}
+
+/// Config surface of the multi-tenant CountryRestrict module, called by the hub. Token-keyed.
+#[contractclient(name = "CountryRestrictClient")]
+pub trait CountryRestrictAdmin {
+    fn configure(env: Env, token: Address, identity: Address, allowed: Vec<u32>);
+    fn set_allowed(env: Env, token: Address, allowed: Vec<u32>);
+    fn allowed(env: Env, token: Address) -> Vec<u32>;
+    fn identity(env: Env, token: Address) -> Address;
 }
