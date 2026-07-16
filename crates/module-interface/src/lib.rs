@@ -73,3 +73,12 @@ pub trait IdentityProvider {
     /// Whether the account has been verified by the attestor.
     fn is_verified(env: Env, account: Address) -> bool;
 }
+
+/// Admin surface of the multi-tenant denylist module, called by the hub's forwarders.
+/// Token-keyed so one shared instance serves every token.
+#[contractclient(name = "DenylistClient")]
+pub trait DenylistAdmin {
+    fn add_to_denylist(env: Env, token: Address, account: Address);
+    fn remove_from_denylist(env: Env, token: Address, account: Address);
+    fn is_denied(env: Env, token: Address, account: Address) -> bool;
+}
