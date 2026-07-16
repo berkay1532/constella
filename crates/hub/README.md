@@ -38,7 +38,7 @@ Both require the platform admin's auth.
 ## `launch`: one-signature token deployment
 
 ```
-launch(config: LaunchConfig { admin, denylist }) -> LaunchResult { token }
+launch(config: LaunchConfig { admin, denylist, max_balance }) -> LaunchResult { token }
 ```
 
 Requires only `config.admin.require_auth()` — the new issuer's signature. It:
@@ -48,6 +48,11 @@ Requires only `config.admin.require_auth()` — the new issuer's signature. It:
 2. Records `TokenAdmin(token) = admin`.
 3. If `denylist` is requested, registers the shared denylist module against the token's
    `CanCreate` and `CanTransfer` hooks.
+4. If `max_balance > 0` (0 means "not selected"), registers the shared max-balance module
+   against **all 5 hooks** (`CanCreate`, `CanTransfer`, `Created`, `Transferred`, `Destroyed` —
+   it needs the post-events to keep its per-holder balance mirror in sync, unlike the
+   stateless denylist), then calls `MaxBalanceClient::set_max(token, max_balance)` to
+   initialize that token's cap on the shared module.
 
 ## Hook surface (called by the token)
 
@@ -72,26 +77,33 @@ fan-out above) go through a single `mod hooks { pub const CAN_CREATE: &str = ...
 `src/lib.rs` — never a raw string literal at either call site. This closes off a whole class of
 "registered under a typo'd hook name, so it's silently never invoked" bugs.
 
-## Issuer forwarders (denylist)
+## Issuer forwarders (denylist, MaxBalance)
 
-The hub also forwards issuer-gated writes to the shared denylist module, so an issuer never
-needs to hold the module's address or auth directly:
+The hub also forwards issuer-gated writes to the shared modules, so an issuer never needs to
+hold a module's address or auth directly:
 
 - `add_to_denylist(token, account)` / `remove_from_denylist(token, account)` — require
   `TokenAdmin(token).require_auth()` (i.e. only *that* token's issuer), then call the shared
   denylist module via `DenylistClient`.
 - `is_denied(token, account) -> bool` — unauthenticated read passthrough.
+- `set_max_balance(token, cap)` — requires `TokenAdmin(token).require_auth()`, then calls the
+  shared max-balance module via `MaxBalanceClient::set_max` to change that token's cap after
+  launch.
+- `max_balance(token) -> i128` — unauthenticated read passthrough.
 
-This is the hub's single auth surface for per-token module administration: the module itself
-(`hub-module-denylist`) trusts only the hub's own `require_auth()` (see its README), and the hub
-gates that trust per-token via `TokenAdmin`.
+This is the hub's single auth surface for per-token module administration: each module itself
+(`hub-module-denylist`, `hub-module-max-balance`) trusts only the hub's own `require_auth()`
+(see their READMEs), and the hub gates that trust per-token via `TokenAdmin`. Both forwarder
+families resolve their module address through the same private `module_addr(env, kind)`
+helper — a single lookup shared by every module kind, rather than one hand-written accessor
+per module.
 
 ## Build-order note
 
-Hub tests `contractimport!` the built token and denylist module Wasm (see `src/test.rs`), so
-`stellar contract build` must run **before** `cargo test -p constella-hub` — a plain `cargo test`
-against stale or missing Wasm artifacts will fail to compile the test module or exercise stale
-contract code:
+Hub tests `contractimport!` the built token, denylist, and max-balance module Wasm (see
+`src/test.rs`), so `stellar contract build` must run **before** `cargo test -p constella-hub` —
+a plain `cargo test` against stale or missing Wasm artifacts will fail to compile the test
+module or exercise stale contract code:
 
 ```bash
 stellar contract build
@@ -100,9 +112,10 @@ cargo test -p constella-hub
 
 ## Dependencies
 
-The hub depends only on `constella-module-interface` (`ModuleClient`, `DenylistClient`) for
-cross-contract calls — never on a concrete module or token `#[contract]` crate. This keeps the
-hub decoupled from every module's implementation; it only needs the shared ABI.
+The hub depends only on `constella-module-interface` (`ModuleClient`, `DenylistClient`,
+`MaxBalanceClient`) for cross-contract calls — never on a concrete module or token `#[contract]`
+crate. This keeps the hub decoupled from every module's implementation; it only needs the
+shared ABI.
 
 ## Live testnet evidence — one-signature launch
 
@@ -111,3 +124,9 @@ Verified on Stellar testnet: the hub + a shared denylist module were deployed on
 - **One-signature launch tx:** [`172f634c…`](https://stellar.expert/explorer/testnet/tx/172f634ce7bc9f26db010eeb767e7d2d31a78bc40362c8d38bfb59b49cbe7422) → launched token `CDZQI5NDI2U6QEQXSYXFRBDT5OTNNJBKMQEDB7Z5PU2ZSI4DWEJKKPRG`
 - Mint to a holder passed; after the issuer denylisted an account (forwarded through the hub, `is_denied = true`), a transfer to it **reverted** — the shared denylist instance enforces per-token, live.
 - Hub `CDSZ22AN…NETQ`, shared denylist `CA7LHK4K…QPWT`. Re-run with `scripts/` equivalents to regenerate.
+
+## Live testnet evidence — per-token MaxBalance cap
+
+The stateful balance-mirror path (updated through the hub's post-event fan-out) enforces a per-token cap live:
+- **One-signature launch** (cap 1000): tx [`a08c07ba…`](https://stellar.expert/explorer/testnet/tx/a08c07ba3a4a3a12e5a94c9d9b7bc8914d21e93d4110baca7f44e6f610dd9226) → token `CDTRFHTR2EEXWV5MAG2W5ZXKCVQ5OH4VEDBJES7HZA4JZLAPHCDEH63X`.
+- Mint 900 passed (under cap; the shared module's `Bal(token, holder)` mirror updated via the hub's `created` fan-out); a further mint of 200 **reverted** (900 + 200 > 1000) with the balance unchanged at 900 — the cap enforced live on a shared module instance.

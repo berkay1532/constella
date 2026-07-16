@@ -82,3 +82,11 @@ pub trait DenylistAdmin {
     fn remove_from_denylist(env: Env, token: Address, account: Address);
     fn is_denied(env: Env, token: Address, account: Address) -> bool;
 }
+
+/// Config surface of the multi-tenant MaxBalance module, called by the hub (launch init
+/// + the issuer forwarder). Token-keyed.
+#[contractclient(name = "MaxBalanceClient")]
+pub trait MaxBalanceAdmin {
+    fn set_max(env: Env, token: Address, cap: i128);
+    fn max(env: Env, token: Address) -> i128;
+}
