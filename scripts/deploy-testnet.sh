@@ -37,9 +37,9 @@ inv() { # inv <contract-id> <source> <fn> <args...>
 echo "▸ Deploying contracts…"
 IDENTITY=$(dep constella_identity_mock --admin "$ADMIN")
 COMPLIANCE=$(dep constella_compliance --admin "$ADMIN")
-MAX_HOLDERS=$(dep constella_module_max_holders --admin "$ADMIN" --max 5)
-LOCKUP=$(dep constella_module_lockup --admin "$ADMIN" --lock_seconds 0)
-MAX_BALANCE=$(dep constella_module_max_balance --admin "$ADMIN" --max_per_holder 1000000)
+MAX_HOLDERS=$(dep constella_module_max_holders --admin "$ADMIN" --dispatcher "$COMPLIANCE" --max 5)
+LOCKUP=$(dep constella_module_lockup --admin "$ADMIN" --dispatcher "$COMPLIANCE" --lock_seconds 0)
+MAX_BALANCE=$(dep constella_module_max_balance --admin "$ADMIN" --dispatcher "$COMPLIANCE" --max_per_holder 1000000)
 COUNTRY=$(dep constella_module_country_restrict --admin "$ADMIN" --identity "$IDENTITY" --allowed '[840,276]')
 TOKEN=$(dep constella_demo_token --admin "$ADMIN" --compliance "$COMPLIANCE")
 echo "  identity=$IDENTITY"; echo "  compliance=$COMPLIANCE"; echo "  token=$TOKEN"
@@ -76,7 +76,7 @@ echo "▸ Deploying reference compliant token with the W2/W3 modules…"
 # is isolated.
 REF_COMPLIANCE=$(dep constella_compliance --admin "$ADMIN")
 DENYLIST=$(dep constella_module_denylist --admin "$ADMIN")
-INVESTORS=$(dep constella_module_max_investors_per_country --admin "$ADMIN" --identity "$IDENTITY" --cap 1)
+INVESTORS=$(dep constella_module_max_investors_per_country --admin "$ADMIN" --dispatcher "$REF_COMPLIANCE" --identity "$IDENTITY" --cap 1)
 WINDOW=$(dep constella_module_transfer_window --admin "$ADMIN")
 REF_TOKEN=$(dep constella_demo_token --admin "$ADMIN" --compliance "$REF_COMPLIANCE")
 echo "  refCompliance=$REF_COMPLIANCE"; echo "  denylist=$DENYLIST"; echo "  investors=$INVESTORS (cap 1/country)"; echo "  window=$WINDOW"; echo "  refToken=$REF_TOKEN"
