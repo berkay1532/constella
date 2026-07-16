@@ -59,7 +59,7 @@ fn set_cap_updates_cap() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
 fn set_cap_requires_admin() {
     // Register the module without blanket auth mocking so the admin
     // authorization on `set_cap` is actually required.
@@ -76,7 +76,7 @@ fn set_cap_requires_admin() {
 // post-event directly. We do NOT mock the dispatcher's auth, so require_auth() on
 // `dispatcher` must reject.
 #[test]
-#[should_panic]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
 fn created_rejects_non_dispatcher_caller() {
     let env = Env::default();
     let admin = Address::generate(&env);
