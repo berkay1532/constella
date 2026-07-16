@@ -30,15 +30,17 @@ on the module is scoped by `token`. Denylisting `bob` on token A never touches t
 Before any token can launch, the platform admin (set at hub construction) configures the hub:
 
 - `set_token_wasm(hash)` — the token Wasm to deploy for every `launch`.
+- `set_identity_wasm(hash)` — the identity-provider Wasm to deploy, one fresh instance per
+  token, whenever a launch opts into `country_restrict`.
 - `set_module_addr(kind, addr)` — register a shared module's address under a `kind` symbol
-  (e.g. `"denylist"`), so `launch` can wire it up by name.
+  (e.g. `"denylist"`, `"country_restrict"`), so `launch` can wire it up by name.
 
-Both require the platform admin's auth.
+All three require the platform admin's auth.
 
 ## `launch`: one-signature token deployment
 
 ```
-launch(config: LaunchConfig { admin, denylist, max_balance }) -> LaunchResult { token }
+launch(config: LaunchConfig { admin, denylist, max_balance, country_restrict }) -> LaunchResult { token }
 ```
 
 Requires only `config.admin.require_auth()` — the new issuer's signature. It:
@@ -53,6 +55,34 @@ Requires only `config.admin.require_auth()` — the new issuer's signature. It:
    it needs the post-events to keep its per-holder balance mirror in sync, unlike the
    stateless denylist), then calls `MaxBalanceClient::set_max(token, max_balance)` to
    initialize that token's cap on the shared module.
+5. If `country_restrict` is non-empty (empty means "not selected"), deploys a **brand-new
+   identity-provider instance for this token** — `(admin,)` as its constructor arg, so the
+   token's own issuer is that identity's attestor — records `Identity(token) = identity`,
+   registers the shared `country_restrict` module against `CanCreate` and `CanTransfer`, then
+   calls `CountryRestrictClient::configure(token, identity, country_restrict)` to point the
+   shared module at this token's fresh identity and allow-list in one call.
+
+## Per-token identity model
+
+Unlike denylist/MaxBalance (whose *module* is shared but whose *state* is merely keyed by
+token), `country_restrict` also gets a **dedicated identity instance per token**, deployed at
+`launch` time. This is deliberate: an account's attested country is a claim made *about that
+person, for that token's compliance context* — token A's issuer attesting "this account is
+US-resident" should never leak into or be confused with token B's issuer's own attestation of
+the same real-world person. Two tokens sharing one `country_restrict` module instance still
+get fully independent identity data because:
+
+- Each token's identity is its own deployed contract instance (own storage, own admin — that
+  token's issuer).
+- The shared `country_restrict` module stores `Identity(token) -> that instance's address` and
+  reads through it (`IdentityClient::country_of`) only for that token's checks.
+
+The issuer attests directly on `identity(token)` (see below) — there is no hub forwarder for
+attestation itself, only for the allow-list.
+
+- `identity(token) -> Address` — unauthenticated read; returns that token's identity instance
+  address so the issuer (or any integrator) can call `set_country`/`set_verified` on it
+  directly, `require_auth`-gated by that identity instance's own admin (the issuer).
 
 ## Hook surface (called by the token)
 
@@ -90,20 +120,24 @@ hold a module's address or auth directly:
   shared max-balance module via `MaxBalanceClient::set_max` to change that token's cap after
   launch.
 - `max_balance(token) -> i128` — unauthenticated read passthrough.
+- `set_country_allow(token, codes)` — requires `TokenAdmin(token).require_auth()`, then calls
+  the shared country-restrict module via `CountryRestrictClient::set_allowed` to change that
+  token's allow-list after launch. (Attestation itself is not forwarded — see "Per-token
+  identity model" above; the issuer calls the identity instance directly.)
 
 This is the hub's single auth surface for per-token module administration: each module itself
-(`hub-module-denylist`, `hub-module-max-balance`) trusts only the hub's own `require_auth()`
-(see their READMEs), and the hub gates that trust per-token via `TokenAdmin`. Both forwarder
-families resolve their module address through the same private `module_addr(env, kind)`
-helper — a single lookup shared by every module kind, rather than one hand-written accessor
-per module.
+(`hub-module-denylist`, `hub-module-max-balance`, `hub-module-country-restrict`) trusts only
+the hub's own `require_auth()` (see their READMEs), and the hub gates that trust per-token via
+`TokenAdmin`. All forwarder families resolve their module address through the same private
+`module_addr(env, kind)` helper — a single lookup shared by every module kind, rather than one
+hand-written accessor per module.
 
 ## Build-order note
 
-Hub tests `contractimport!` the built token, denylist, and max-balance module Wasm (see
-`src/test.rs`), so `stellar contract build` must run **before** `cargo test -p constella-hub` —
-a plain `cargo test` against stale or missing Wasm artifacts will fail to compile the test
-module or exercise stale contract code:
+Hub tests `contractimport!` the built token, denylist, max-balance, country-restrict, and
+identity-mock Wasm (see `src/test.rs`), so `stellar contract build` must run **before**
+`cargo test -p constella-hub` — a plain `cargo test` against stale or missing Wasm artifacts
+will fail to compile the test module or exercise stale contract code:
 
 ```bash
 stellar contract build
@@ -113,9 +147,12 @@ cargo test -p constella-hub
 ## Dependencies
 
 The hub depends only on `constella-module-interface` (`ModuleClient`, `DenylistClient`,
-`MaxBalanceClient`) for cross-contract calls — never on a concrete module or token `#[contract]`
-crate. This keeps the hub decoupled from every module's implementation; it only needs the
-shared ABI.
+`MaxBalanceClient`, `CountryRestrictClient`) for cross-contract calls — never on a concrete
+module or token `#[contract]` crate. This keeps the hub decoupled from every module's
+implementation; it only needs the shared ABI. The per-token identity instances the hub
+deploys (see "Per-token identity model" above) are likewise reached only by `Address`
+(`deploy_v2` against a platform-configured Wasm hash) — the hub never depends on the
+identity-mock `#[contract]` crate either.
 
 ## Live testnet evidence — one-signature launch
 

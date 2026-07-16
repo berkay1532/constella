@@ -17,6 +17,16 @@ mod maxbal_wasm {
         file = "../../target/wasm32v1-none/release/constella_hub_module_max_balance.wasm"
     );
 }
+mod country_wasm {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/constella_hub_module_country_restrict.wasm"
+    );
+}
+mod identity_wasm {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/constella_identity_mock.wasm"
+    );
+}
 
 fn deploy_hub(env: &Env) -> (HubClient<'static>, Address) {
     let admin = Address::generate(env);
@@ -41,6 +51,7 @@ fn launch_deploys_token_and_wires_denylist() {
         admin: issuer.clone(),
         denylist: true,
         max_balance: 0,
+        country_restrict: soroban_sdk::vec![&env],
     });
 
     assert_eq!(hub.token_admin(&res.token), issuer);
@@ -66,6 +77,7 @@ fn two_tokens_denylist_isolated_end_to_end() {
             admin: issuer_a.clone(),
             denylist: true,
             max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
         })
         .token;
     let tb = hub
@@ -73,6 +85,7 @@ fn two_tokens_denylist_isolated_end_to_end() {
             admin: issuer_b.clone(),
             denylist: true,
             max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
         })
         .token;
 
@@ -111,6 +124,7 @@ fn only_token_admin_can_denylist() {
             admin: issuer,
             denylist: true,
             max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
         })
         .token;
     let bob = Address::generate(&env);
@@ -135,6 +149,7 @@ fn two_tokens_max_balance_isolated_end_to_end() {
             admin: Address::generate(&env),
             denylist: false,
             max_balance: 1000,
+            country_restrict: soroban_sdk::vec![&env],
         })
         .token;
     let tb = hub
@@ -142,6 +157,7 @@ fn two_tokens_max_balance_isolated_end_to_end() {
             admin: Address::generate(&env),
             denylist: false,
             max_balance: 100,
+            country_restrict: soroban_sdk::vec![&env],
         })
         .token;
     let tok_a = token_wasm::Client::new(&env, &ta);
@@ -177,8 +193,84 @@ fn only_token_admin_can_set_max_balance() {
             admin: Address::generate(&env),
             denylist: false,
             max_balance: 100,
+            country_restrict: soroban_sdk::vec![&env],
         })
         .token;
     env.set_auths(&[]); // drop mocked auths -> the token's issuer did not authorize
     hub.set_max_balance(&t, &999);
+}
+
+// Each token that opts into country_restrict gets its OWN identity instance deployed at
+// launch (admin = that token's issuer). The same real-world person can be attested
+// differently on each token's identity — attesting US on A's identity and TR on B's must
+// keep A's and B's eligibility fully isolated even though both tokens share one
+// CountryRestrict module instance.
+#[test]
+fn two_tokens_country_restrict_isolated_end_to_end() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (hub, hub_addr) = deploy_hub(&env);
+    let token_hash: BytesN<32> = env.deployer().upload_contract_wasm(token_wasm::WASM);
+    hub.set_token_wasm(&token_hash);
+    let identity_hash: BytesN<32> = env.deployer().upload_contract_wasm(identity_wasm::WASM);
+    hub.set_identity_wasm(&identity_hash);
+    let country = env.register(country_wasm::WASM, (hub_addr.clone(),));
+    hub.set_module_addr(&Symbol::new(&env, "country_restrict"), &country);
+
+    // token A allows US(840); token B allows DE(276)
+    let ta = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env, 840u32],
+        })
+        .token;
+    let tb = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env, 276u32],
+        })
+        .token;
+
+    // Each token got its own identity; attest alice as US on A's, TR on B's.
+    let id_a = identity_wasm::Client::new(&env, &hub.identity(&ta));
+    let id_b = identity_wasm::Client::new(&env, &hub.identity(&tb));
+    let alice = Address::generate(&env);
+    id_a.set_country(&alice, &840);
+    id_b.set_country(&alice, &792);
+
+    let tok_a = token_wasm::Client::new(&env, &ta);
+    let tok_b = token_wasm::Client::new(&env, &tb);
+    tok_a.mint(&alice, &100); // US ∈ {US} on A -> ok
+    assert_eq!(tok_a.balance(&alice), 100);
+    assert!(tok_b.try_mint(&alice, &100).is_err()); // TR ∉ {DE} on B -> denied (isolated)
+}
+
+// Same negative-auth pattern as `only_token_admin_can_denylist`/`only_token_admin_can_set_max_balance`:
+// the forwarder's only auth gate is `Admin(token).require_auth()`.
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn only_token_admin_can_set_country_allow() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (hub, hub_addr) = deploy_hub(&env);
+    let token_hash: BytesN<32> = env.deployer().upload_contract_wasm(token_wasm::WASM);
+    hub.set_token_wasm(&token_hash);
+    let identity_hash: BytesN<32> = env.deployer().upload_contract_wasm(identity_wasm::WASM);
+    hub.set_identity_wasm(&identity_hash);
+    let country = env.register(country_wasm::WASM, (hub_addr.clone(),));
+    hub.set_module_addr(&Symbol::new(&env, "country_restrict"), &country);
+    let t = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env, 840u32],
+        })
+        .token;
+    env.set_auths(&[]);
+    hub.set_country_allow(&t, &soroban_sdk::vec![&env, 276u32]);
 }
