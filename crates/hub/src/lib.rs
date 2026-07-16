@@ -3,7 +3,7 @@
 //! a per-(token,hook) registry of shared module addresses, and a one-signature `launch`
 //! that deploys the token (pointed at this hub) and wires the selected shared modules.
 
-use constella_module_interface::{DenylistClient, ModuleClient};
+use constella_module_interface::{DenylistClient, MaxBalanceClient, ModuleClient};
 use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, BytesN, Env, Symbol, Vec};
 
 #[cfg(test)]
@@ -25,6 +25,7 @@ mod hooks {
 pub struct LaunchConfig {
     pub admin: Address,
     pub denylist: bool,
+    pub max_balance: i128, // 0 = not selected
 }
 
 #[contracttype]
@@ -92,14 +93,23 @@ impl Hub {
             .set(&DataKey::TokenAdmin(token.clone()), &config.admin);
 
         if config.denylist {
-            let m: Address = env
-                .storage()
-                .instance()
-                .get(&DataKey::ModuleAddr(Symbol::new(&env, "denylist")))
-                .unwrap();
+            let m = Self::module_addr(&env, "denylist");
             for h in [hooks::CAN_CREATE, hooks::CAN_TRANSFER] {
                 Self::register(&env, &token, &Symbol::new(&env, h), &m);
             }
+        }
+        if config.max_balance > 0 {
+            let m = Self::module_addr(&env, "max_balance");
+            for h in [
+                hooks::CAN_CREATE,
+                hooks::CAN_TRANSFER,
+                hooks::CREATED,
+                hooks::TRANSFERRED,
+                hooks::DESTROYED,
+            ] {
+                Self::register(&env, &token, &Symbol::new(&env, h), &m);
+            }
+            MaxBalanceClient::new(&env, &m).set_max(&token, &config.max_balance);
         }
         LaunchResult { token }
     }
@@ -179,15 +189,23 @@ impl Hub {
     // --- issuer forwarders (single auth surface: Admin(token).require_auth) ---
     pub fn add_to_denylist(env: Env, token: Address, account: Address) {
         Self::require_token_admin(&env, &token);
-        DenylistClient::new(&env, &Self::denylist_addr(&env)).add_to_denylist(&token, &account);
+        DenylistClient::new(&env, &Self::module_addr(&env, "denylist"))
+            .add_to_denylist(&token, &account);
     }
     pub fn remove_from_denylist(env: Env, token: Address, account: Address) {
         Self::require_token_admin(&env, &token);
-        DenylistClient::new(&env, &Self::denylist_addr(&env))
+        DenylistClient::new(&env, &Self::module_addr(&env, "denylist"))
             .remove_from_denylist(&token, &account);
     }
     pub fn is_denied(env: Env, token: Address, account: Address) -> bool {
-        DenylistClient::new(&env, &Self::denylist_addr(&env)).is_denied(&token, &account)
+        DenylistClient::new(&env, &Self::module_addr(&env, "denylist")).is_denied(&token, &account)
+    }
+    pub fn set_max_balance(env: Env, token: Address, cap: i128) {
+        Self::require_token_admin(&env, &token);
+        MaxBalanceClient::new(&env, &Self::module_addr(&env, "max_balance")).set_max(&token, &cap);
+    }
+    pub fn max_balance(env: Env, token: Address) -> i128 {
+        MaxBalanceClient::new(&env, &Self::module_addr(&env, "max_balance")).max(&token)
     }
 }
 
@@ -208,10 +226,10 @@ impl Hub {
             .unwrap();
         a.require_auth();
     }
-    fn denylist_addr(env: &Env) -> Address {
+    fn module_addr(env: &Env, kind: &str) -> Address {
         env.storage()
             .instance()
-            .get(&DataKey::ModuleAddr(Symbol::new(env, "denylist")))
+            .get(&DataKey::ModuleAddr(Symbol::new(env, kind)))
             .unwrap()
     }
     fn next_salt(env: &Env) -> BytesN<32> {
