@@ -459,6 +459,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "constella-hub-module-lockup"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "constella-hub-module-max-balance"
 version = "0.1.0"
 dependencies = [
