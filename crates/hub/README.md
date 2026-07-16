@@ -103,3 +103,11 @@ cargo test -p constella-hub
 The hub depends only on `constella-module-interface` (`ModuleClient`, `DenylistClient`) for
 cross-contract calls — never on a concrete module or token `#[contract]` crate. This keeps the
 hub decoupled from every module's implementation; it only needs the shared ABI.
+
+## Live testnet evidence — one-signature launch
+
+Verified on Stellar testnet: the hub + a shared denylist module were deployed once, then a funded issuer launched a full compliant token in **ONE signed transaction**, and the shared module enforced the denylist live.
+
+- **One-signature launch tx:** [`172f634c…`](https://stellar.expert/explorer/testnet/tx/172f634ce7bc9f26db010eeb767e7d2d31a78bc40362c8d38bfb59b49cbe7422) → launched token `CDZQI5NDI2U6QEQXSYXFRBDT5OTNNJBKMQEDB7Z5PU2ZSI4DWEJKKPRG`
+- Mint to a holder passed; after the issuer denylisted an account (forwarded through the hub, `is_denied = true`), a transfer to it **reverted** — the shared denylist instance enforces per-token, live.
+- Hub `CDSZ22AN…NETQ`, shared denylist `CA7LHK4K…QPWT`. Re-run with `scripts/` equivalents to regenerate.
