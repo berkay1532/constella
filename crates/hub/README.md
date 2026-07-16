@@ -167,3 +167,10 @@ Verified on Stellar testnet: the hub + a shared denylist module were deployed on
 The stateful balance-mirror path (updated through the hub's post-event fan-out) enforces a per-token cap live:
 - **One-signature launch** (cap 1000): tx [`a08c07ba…`](https://stellar.expert/explorer/testnet/tx/a08c07ba3a4a3a12e5a94c9d9b7bc8914d21e93d4110baca7f44e6f610dd9226) → token `CDTRFHTR2EEXWV5MAG2W5ZXKCVQ5OH4VEDBJES7HZA4JZLAPHCDEH63X`.
 - Mint 900 passed (under cap; the shared module's `Bal(token, holder)` mirror updated via the hub's `created` fan-out); a further mint of 200 **reverted** (900 + 200 > 1000) with the balance unchanged at 900 — the cap enforced live on a shared module instance.
+
+## Live testnet evidence — per-token identity (CountryRestrict)
+
+The per-token identity mechanic enforces a country allow-list live:
+- **One-signature launch** (allow US=840): tx [`0778f025…`](https://stellar.expert/explorer/testnet/tx/0778f0252bb7ea88a472f6469fffd22717ab9582cf282ad30cdaef023af23cd6) → token `CDNKCDLQ6MJBS7AOTA6RWWJNCTSLF7KWTRDQ4UTDQQKCWG7BWSOXRBKU`.
+- The hub deployed a **dedicated identity provider for that token**, read back via `hub.identity(token)` → `CA4QS7SNEAJZIMF22IXCPEXLPFRTHSP3ZGDQF74QOTLKVKRGIBGTWLFY`. The issuer (its admin) attested `alice = US(840)` and `carol = TR(792)` directly on it.
+- Minting to alice passed (US ∈ {US}); minting to carol **reverted** (TR ∉ {US}) — CountryRestrict enforced live, reading each token's own identity.
