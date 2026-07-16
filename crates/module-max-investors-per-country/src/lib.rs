@@ -20,6 +20,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 #[contracttype]
 enum DataKey {
     Admin,
+    Dispatcher,
     Identity,
     Cap,
     Bal(Address),
@@ -31,8 +32,17 @@ pub struct MaxInvestorsPerCountryModule;
 
 #[contractimpl]
 impl MaxInvestorsPerCountryModule {
-    pub fn __constructor(env: Env, admin: Address, identity: Address, cap: u32) {
+    pub fn __constructor(
+        env: Env,
+        admin: Address,
+        dispatcher: Address,
+        identity: Address,
+        cap: u32,
+    ) {
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::Dispatcher, &dispatcher);
         env.storage().instance().set(&DataKey::Identity, &identity);
         env.storage().instance().set(&DataKey::Cap, &cap);
     }
@@ -104,20 +114,28 @@ impl MaxInvestorsPerCountryModule {
     }
 
     pub fn transferred(env: Env, from: Address, to: Address, amount: i128, _token: Address) {
+        Self::require_dispatcher(&env);
         Self::apply(&env, &from, -amount);
         Self::apply(&env, &to, amount);
     }
 
     pub fn created(env: Env, to: Address, amount: i128, _token: Address) {
+        Self::require_dispatcher(&env);
         Self::apply(&env, &to, amount);
     }
 
     pub fn destroyed(env: Env, from: Address, amount: i128, _token: Address) {
+        Self::require_dispatcher(&env);
         Self::apply(&env, &from, -amount);
     }
 }
 
 impl MaxInvestorsPerCountryModule {
+    fn require_dispatcher(env: &Env) {
+        let d: Address = env.storage().instance().get(&DataKey::Dispatcher).unwrap();
+        d.require_auth();
+    }
+
     fn bal(env: &Env, who: &Address) -> i128 {
         env.storage()
             .persistent()
