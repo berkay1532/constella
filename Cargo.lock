@@ -435,6 +435,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "constella-hub-module-denylist"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "constella-identity-mock"
 version = "0.1.0"
 dependencies = [
