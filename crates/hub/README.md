@@ -207,3 +207,9 @@ The per-token identity mechanic enforces a country allow-list live:
 - **One-signature launch** (allow US=840): tx [`0778f025…`](https://stellar.expert/explorer/testnet/tx/0778f0252bb7ea88a472f6469fffd22717ab9582cf282ad30cdaef023af23cd6) → token `CDNKCDLQ6MJBS7AOTA6RWWJNCTSLF7KWTRDQ4UTDQQKCWG7BWSOXRBKU`.
 - The hub deployed a **dedicated identity provider for that token**, read back via `hub.identity(token)` → `CA4QS7SNEAJZIMF22IXCPEXLPFRTHSP3ZGDQF74QOTLKVKRGIBGTWLFY`. The issuer (its admin) attested `alice = US(840)` and `carol = TR(792)` directly on it.
 - Minting to alice passed (US ∈ {US}); minting to carol **reverted** (TR ∉ {US}) — CountryRestrict enforced live, reading each token's own identity.
+
+## Live testnet evidence — MaxHolders + TransferWindow
+
+Both enforce per token, live, from one launch:
+- **One-signature launch** (`max_holders: 1, transfer_window: true`): tx [`849d7b3d…`](https://stellar.expert/explorer/testnet/tx/849d7b3dc1261b2824df61b4fa23f8afcc9feb05b14fd3d3f1cc85770daff701).
+- Minting a 1st holder passed (`holders = 1`); minting a 2nd holder **reverted** (MaxHolders cap 1). Then `hub.pause(token)` (`is_paused = true`) made a mint **revert** (frozen), and `hub.unpause(token)` let it pass again — the shared modules enforce and the issuer's forwarders drive per-token config, live.
