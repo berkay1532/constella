@@ -4,7 +4,8 @@
 //! that deploys the token (pointed at this hub) and wires the selected shared modules.
 
 use constella_module_interface::{
-    CountryRestrictClient, DenylistClient, MaxBalanceClient, ModuleClient,
+    CountryRestrictClient, DenylistClient, LockupClient, MaxBalanceClient, MaxHoldersClient,
+    ModuleClient, TransferWindowClient,
 };
 use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, BytesN, Env, Symbol, Vec};
 
@@ -29,6 +30,9 @@ pub struct LaunchConfig {
     pub denylist: bool,
     pub max_balance: i128,          // 0 = not selected
     pub country_restrict: Vec<u32>, // empty = not selected
+    pub max_holders: u32,           // 0 = not selected
+    pub lockup: u64,                // 0 = not selected
+    pub transfer_window: bool,
 }
 
 #[contracttype]
@@ -141,6 +145,32 @@ impl Hub {
                 &config.country_restrict,
             );
         }
+        if config.max_holders > 0 {
+            let m = Self::module_addr(&env, "max_holders");
+            for h in [
+                hooks::CAN_CREATE,
+                hooks::CAN_TRANSFER,
+                hooks::CREATED,
+                hooks::TRANSFERRED,
+                hooks::DESTROYED,
+            ] {
+                Self::register(&env, &token, &Symbol::new(&env, h), &m);
+            }
+            MaxHoldersClient::new(&env, &m).set_max(&token, &config.max_holders);
+        }
+        if config.lockup > 0 {
+            let m = Self::module_addr(&env, "lockup");
+            for h in [hooks::CAN_TRANSFER, hooks::CREATED, hooks::TRANSFERRED] {
+                Self::register(&env, &token, &Symbol::new(&env, h), &m);
+            }
+            LockupClient::new(&env, &m).set_duration(&token, &config.lockup);
+        }
+        if config.transfer_window {
+            let m = Self::module_addr(&env, "transfer_window");
+            for h in [hooks::CAN_CREATE, hooks::CAN_TRANSFER] {
+                Self::register(&env, &token, &Symbol::new(&env, h), &m);
+            }
+        }
         LaunchResult { token }
     }
 
@@ -247,6 +277,47 @@ impl Hub {
         Self::require_token_admin(&env, &token);
         CountryRestrictClient::new(&env, &Self::module_addr(&env, "country_restrict"))
             .set_allowed(&token, &codes);
+    }
+    pub fn set_max_holders(env: Env, token: Address, cap: u32) {
+        Self::require_token_admin(&env, &token);
+        MaxHoldersClient::new(&env, &Self::module_addr(&env, "max_holders")).set_max(&token, &cap);
+    }
+    pub fn max_holders(env: Env, token: Address) -> u32 {
+        MaxHoldersClient::new(&env, &Self::module_addr(&env, "max_holders")).max(&token)
+    }
+    pub fn holders(env: Env, token: Address) -> u32 {
+        MaxHoldersClient::new(&env, &Self::module_addr(&env, "max_holders")).holders(&token)
+    }
+    pub fn set_lockup(env: Env, token: Address, secs: u64) {
+        Self::require_token_admin(&env, &token);
+        LockupClient::new(&env, &Self::module_addr(&env, "lockup")).set_duration(&token, &secs);
+    }
+    pub fn unlock_at(env: Env, token: Address, holder: Address) -> u64 {
+        LockupClient::new(&env, &Self::module_addr(&env, "lockup")).unlock_at(&token, &holder)
+    }
+    pub fn pause(env: Env, token: Address) {
+        Self::require_token_admin(&env, &token);
+        TransferWindowClient::new(&env, &Self::module_addr(&env, "transfer_window")).pause(&token);
+    }
+    pub fn unpause(env: Env, token: Address) {
+        Self::require_token_admin(&env, &token);
+        TransferWindowClient::new(&env, &Self::module_addr(&env, "transfer_window"))
+            .unpause(&token);
+    }
+    pub fn set_window(env: Env, token: Address, open_from: Option<u64>, open_until: Option<u64>) {
+        Self::require_token_admin(&env, &token);
+        TransferWindowClient::new(&env, &Self::module_addr(&env, "transfer_window")).set_window(
+            &token,
+            &open_from,
+            &open_until,
+        );
+    }
+    pub fn is_paused(env: Env, token: Address) -> bool {
+        TransferWindowClient::new(&env, &Self::module_addr(&env, "transfer_window"))
+            .is_paused(&token)
+    }
+    pub fn transfer_window(env: Env, token: Address) -> (Option<u64>, Option<u64>) {
+        TransferWindowClient::new(&env, &Self::module_addr(&env, "transfer_window")).window(&token)
     }
 }
 

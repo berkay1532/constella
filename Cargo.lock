@@ -480,6 +480,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "constella-hub-module-transfer-window"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "constella-identity-mock"
 version = "0.1.0"
 dependencies = [

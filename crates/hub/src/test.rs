@@ -1,6 +1,9 @@
 #![cfg(test)]
 use crate::{Hub, HubClient, LaunchConfig};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Symbol};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    Address, BytesN, Env, Symbol,
+};
 
 mod token_wasm {
     soroban_sdk::contractimport!(
@@ -25,6 +28,21 @@ mod country_wasm {
 mod identity_wasm {
     soroban_sdk::contractimport!(
         file = "../../target/wasm32v1-none/release/constella_identity_mock.wasm"
+    );
+}
+mod holders_wasm {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/constella_hub_module_max_holders.wasm"
+    );
+}
+mod lockup_wasm {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/constella_hub_module_lockup.wasm"
+    );
+}
+mod window_wasm {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/constella_hub_module_transfer_window.wasm"
     );
 }
 
@@ -52,6 +70,9 @@ fn launch_deploys_token_and_wires_denylist() {
         denylist: true,
         max_balance: 0,
         country_restrict: soroban_sdk::vec![&env],
+        max_holders: 0,
+        lockup: 0,
+        transfer_window: false,
     });
 
     assert_eq!(hub.token_admin(&res.token), issuer);
@@ -78,6 +99,9 @@ fn two_tokens_denylist_isolated_end_to_end() {
             denylist: true,
             max_balance: 0,
             country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
         })
         .token;
     let tb = hub
@@ -86,6 +110,9 @@ fn two_tokens_denylist_isolated_end_to_end() {
             denylist: true,
             max_balance: 0,
             country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
         })
         .token;
 
@@ -125,6 +152,9 @@ fn only_token_admin_can_denylist() {
             denylist: true,
             max_balance: 0,
             country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
         })
         .token;
     let bob = Address::generate(&env);
@@ -150,6 +180,9 @@ fn two_tokens_max_balance_isolated_end_to_end() {
             denylist: false,
             max_balance: 1000,
             country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
         })
         .token;
     let tb = hub
@@ -158,6 +191,9 @@ fn two_tokens_max_balance_isolated_end_to_end() {
             denylist: false,
             max_balance: 100,
             country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
         })
         .token;
     let tok_a = token_wasm::Client::new(&env, &ta);
@@ -194,6 +230,9 @@ fn only_token_admin_can_set_max_balance() {
             denylist: false,
             max_balance: 100,
             country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
         })
         .token;
     env.set_auths(&[]); // drop mocked auths -> the token's issuer did not authorize
@@ -224,6 +263,9 @@ fn two_tokens_country_restrict_isolated_end_to_end() {
             denylist: false,
             max_balance: 0,
             country_restrict: soroban_sdk::vec![&env, 840u32],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
         })
         .token;
     let tb = hub
@@ -232,6 +274,9 @@ fn two_tokens_country_restrict_isolated_end_to_end() {
             denylist: false,
             max_balance: 0,
             country_restrict: soroban_sdk::vec![&env, 276u32],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
         })
         .token;
 
@@ -269,8 +314,143 @@ fn only_token_admin_can_set_country_allow() {
             denylist: false,
             max_balance: 0,
             country_restrict: soroban_sdk::vec![&env, 840u32],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
         })
         .token;
     env.set_auths(&[]);
     hub.set_country_allow(&t, &soroban_sdk::vec![&env, 276u32]);
+}
+
+// token A opts into a per-holder cap of 1 (MaxHolders) plus TransferWindow; token B opts into
+// just TransferWindow. Exercises both non-identity modules together and confirms TransferWindow's
+// `pause` is per-token: freezing A must never freeze B, even though both share one module instance.
+#[test]
+fn two_tokens_nonidentity_modules_isolated_end_to_end() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (hub, hub_addr) = deploy_hub(&env);
+    let token_hash: BytesN<32> = env.deployer().upload_contract_wasm(token_wasm::WASM);
+    hub.set_token_wasm(&token_hash);
+    let holders = env.register(holders_wasm::WASM, (hub_addr.clone(),));
+    let window = env.register(window_wasm::WASM, (hub_addr.clone(),));
+    hub.set_module_addr(&Symbol::new(&env, "max_holders"), &holders);
+    hub.set_module_addr(&Symbol::new(&env, "transfer_window"), &window);
+
+    // token A: holder cap 1 + transfer_window; token B: just transfer_window
+    let ta = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
+            max_holders: 1,
+            lockup: 0,
+            transfer_window: true,
+        })
+        .token;
+    let tb = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: true,
+        })
+        .token;
+    let tok_a = token_wasm::Client::new(&env, &ta);
+    let tok_b = token_wasm::Client::new(&env, &tb);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    tok_a.mint(&alice, &10); // 1st holder ok
+    assert!(tok_a.try_mint(&bob, &10).is_err()); // A cap 1 -> 2nd holder denied
+                                                 // freeze A only
+    hub.pause(&ta);
+    assert!(tok_a.try_mint(&alice, &1).is_err()); // A frozen
+    tok_b.mint(&alice, &1); // B not frozen -> ok (isolated)
+    assert!(hub.is_paused(&ta));
+    assert!(!hub.is_paused(&tb));
+}
+
+// token A opts into a 100s lockup; token B does not. Confirms lockup enforcement (transfer
+// blocked before the duration elapses, then allowed after) and that an un-configured token B is
+// entirely unaffected by A's lockup, even though both would share one module instance.
+#[test]
+fn two_tokens_lockup_isolated_end_to_end() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1000);
+    let (hub, hub_addr) = deploy_hub(&env);
+    let token_hash: BytesN<32> = env.deployer().upload_contract_wasm(token_wasm::WASM);
+    hub.set_token_wasm(&token_hash);
+    let lockup = env.register(lockup_wasm::WASM, (hub_addr.clone(),));
+    hub.set_module_addr(&Symbol::new(&env, "lockup"), &lockup);
+
+    let ta = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 100,
+            transfer_window: false,
+        })
+        .token;
+    let tb = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
+        })
+        .token;
+    let tok_a = token_wasm::Client::new(&env, &ta);
+    let tok_b = token_wasm::Client::new(&env, &tb);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    tok_a.mint(&alice, &10);
+    tok_b.mint(&alice, &10);
+    assert!(tok_a.try_transfer(&alice, &bob, &1).is_err()); // still locked on A
+    tok_b.transfer(&alice, &bob, &1); // B has no lockup -> ok (isolated)
+    assert_eq!(hub.unlock_at(&ta, &alice), 1100);
+
+    env.ledger().set_timestamp(1100); // A's lockup elapsed
+    tok_a.transfer(&alice, &bob, &1); // now allowed
+    assert_eq!(tok_a.balance(&bob), 1);
+}
+
+// Same negative-auth pattern as the other forwarders: `pause` is gated on
+// `TokenAdmin(token).require_auth()` (the token's own issuer), not any caller.
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn only_token_admin_can_pause() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (hub, hub_addr) = deploy_hub(&env);
+    let token_hash: BytesN<32> = env.deployer().upload_contract_wasm(token_wasm::WASM);
+    hub.set_token_wasm(&token_hash);
+    let window = env.register(window_wasm::WASM, (hub_addr.clone(),));
+    hub.set_module_addr(&Symbol::new(&env, "transfer_window"), &window);
+    let t = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: true,
+        })
+        .token;
+    env.set_auths(&[]);
+    hub.pause(&t);
 }
