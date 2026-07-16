@@ -124,3 +124,9 @@ Verified on Stellar testnet: the hub + a shared denylist module were deployed on
 - **One-signature launch tx:** [`172f634c…`](https://stellar.expert/explorer/testnet/tx/172f634ce7bc9f26db010eeb767e7d2d31a78bc40362c8d38bfb59b49cbe7422) → launched token `CDZQI5NDI2U6QEQXSYXFRBDT5OTNNJBKMQEDB7Z5PU2ZSI4DWEJKKPRG`
 - Mint to a holder passed; after the issuer denylisted an account (forwarded through the hub, `is_denied = true`), a transfer to it **reverted** — the shared denylist instance enforces per-token, live.
 - Hub `CDSZ22AN…NETQ`, shared denylist `CA7LHK4K…QPWT`. Re-run with `scripts/` equivalents to regenerate.
+
+## Live testnet evidence — per-token MaxBalance cap
+
+The stateful balance-mirror path (updated through the hub's post-event fan-out) enforces a per-token cap live:
+- **One-signature launch** (cap 1000): tx [`a08c07ba…`](https://stellar.expert/explorer/testnet/tx/a08c07ba3a4a3a12e5a94c9d9b7bc8914d21e93d4110baca7f44e6f610dd9226) → token `CDTRFHTR2EEXWV5MAG2W5ZXKCVQ5OH4VEDBJES7HZA4JZLAPHCDEH63X`.
+- Mint 900 passed (under cap; the shared module's `Bal(token, holder)` mirror updated via the hub's `created` fan-out); a further mint of 200 **reverted** (900 + 200 > 1000) with the balance unchanged at 900 — the cap enforced live on a shared module instance.
