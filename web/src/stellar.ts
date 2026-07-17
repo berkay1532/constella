@@ -10,16 +10,16 @@ import {
 } from '@stellar/stellar-sdk';
 import deployed from './deployed.testnet.json';
 
-const server = new rpc.Server(deployed.rpcUrl);
-const NP = deployed.networkPassphrase;
+export const server = new rpc.Server(deployed.rpcUrl);
+export const NP = deployed.networkPassphrase;
 const SOURCE = deployed.accounts.admin;
 
 type ScVal = ReturnType<typeof nativeToScVal>;
-const addr = (a: string) => nativeToScVal(a, { type: 'address' });
-const i128 = (n: number | string) => nativeToScVal(n, { type: 'i128' });
+export const addr = (a: string) => nativeToScVal(a, { type: 'address' });
+export const i128 = (n: number | string) => nativeToScVal(n, { type: 'i128' });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function buildFrom(sourceAcc: Account, contractId: string, method: string, args: ScVal[]) {
+export function buildFrom(sourceAcc: Account, contractId: string, method: string, args: ScVal[]) {
   const c = new Contract(contractId);
   return new TransactionBuilder(sourceAcc, { fee: BASE_FEE, networkPassphrase: NP })
     .addOperation(c.call(method, ...args))
@@ -92,7 +92,7 @@ export type SendResult = { ok: boolean; denied: boolean; reason: string; hash: s
  * `from` must be the connected wallet (it is both the tx source and the authorizer).
  * If a compliance module rejects, preparation fails and we report `denied`.
  */
-type SignFn = (xdr: string) => Promise<string>;
+export type SignFn = (xdr: string) => Promise<string>;
 type ExplainFn = (to: string) => Promise<string>;
 
 async function txTransfer(
@@ -202,7 +202,7 @@ function proofScVal(a: Uint8Array, b: Uint8Array, c: Uint8Array) {
   return xdr.ScVal.scvMap([entry('a', scvBytes(a)), entry('b', scvBytes(b)), entry('c', scvBytes(c))]);
 }
 
-async function signSendPoll(
+export async function signSendPoll(
   unsignedTx: import('@stellar/stellar-sdk').Transaction,
   sign: SignFn,
   step: string,
