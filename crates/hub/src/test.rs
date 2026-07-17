@@ -45,6 +45,11 @@ mod window_wasm {
         file = "../../target/wasm32v1-none/release/constella_hub_module_transfer_window.wasm"
     );
 }
+mod investors_wasm {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/constella_hub_module_max_investors_per_country.wasm"
+    );
+}
 
 fn deploy_hub(env: &Env) -> (HubClient<'static>, Address) {
     let admin = Address::generate(env);
@@ -73,6 +78,7 @@ fn launch_deploys_token_and_wires_denylist() {
         max_holders: 0,
         lockup: 0,
         transfer_window: false,
+        max_investors: 0,
     });
 
     assert_eq!(hub.token_admin(&res.token), issuer);
@@ -102,6 +108,7 @@ fn two_tokens_denylist_isolated_end_to_end() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
     let tb = hub
@@ -113,6 +120,7 @@ fn two_tokens_denylist_isolated_end_to_end() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
 
@@ -155,6 +163,7 @@ fn only_token_admin_can_denylist() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
     let bob = Address::generate(&env);
@@ -183,6 +192,7 @@ fn two_tokens_max_balance_isolated_end_to_end() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
     let tb = hub
@@ -194,6 +204,7 @@ fn two_tokens_max_balance_isolated_end_to_end() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
     let tok_a = token_wasm::Client::new(&env, &ta);
@@ -233,6 +244,7 @@ fn only_token_admin_can_set_max_balance() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
     env.set_auths(&[]); // drop mocked auths -> the token's issuer did not authorize
@@ -266,6 +278,7 @@ fn two_tokens_country_restrict_isolated_end_to_end() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
     let tb = hub
@@ -277,6 +290,7 @@ fn two_tokens_country_restrict_isolated_end_to_end() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
 
@@ -317,6 +331,7 @@ fn only_token_admin_can_set_country_allow() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
     env.set_auths(&[]);
@@ -348,6 +363,7 @@ fn two_tokens_nonidentity_modules_isolated_end_to_end() {
             max_holders: 1,
             lockup: 0,
             transfer_window: true,
+            max_investors: 0,
         })
         .token;
     let tb = hub
@@ -359,6 +375,7 @@ fn two_tokens_nonidentity_modules_isolated_end_to_end() {
             max_holders: 0,
             lockup: 0,
             transfer_window: true,
+            max_investors: 0,
         })
         .token;
     let tok_a = token_wasm::Client::new(&env, &ta);
@@ -399,6 +416,7 @@ fn two_tokens_lockup_isolated_end_to_end() {
             max_holders: 0,
             lockup: 100,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
     let tb = hub
@@ -410,6 +428,7 @@ fn two_tokens_lockup_isolated_end_to_end() {
             max_holders: 0,
             lockup: 0,
             transfer_window: false,
+            max_investors: 0,
         })
         .token;
     let tok_a = token_wasm::Client::new(&env, &ta);
@@ -449,8 +468,103 @@ fn only_token_admin_can_pause() {
             max_holders: 0,
             lockup: 0,
             transfer_window: true,
+            max_investors: 0,
         })
         .token;
     env.set_auths(&[]);
     hub.pause(&t);
+}
+
+// token A opts into BOTH country_restrict[US] and max_investors(cap 1); token B opts into
+// max_investors(cap 2) only. Confirms: (1) a token selecting two identity-dependent modules
+// gets ONE shared per-token identity (attesting on hub.identity(A) drives the MaxInvestors count);
+// (2) the per-country investor cap enforces live through the token; (3) token B's cap/count are
+// fully isolated from A even though both share one MaxInvestors module instance.
+#[test]
+fn two_tokens_max_investors_isolated_and_shares_identity() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (hub, hub_addr) = deploy_hub(&env);
+    let token_hash: BytesN<32> = env.deployer().upload_contract_wasm(token_wasm::WASM);
+    hub.set_token_wasm(&token_hash);
+    let identity_hash: BytesN<32> = env.deployer().upload_contract_wasm(identity_wasm::WASM);
+    hub.set_identity_wasm(&identity_hash);
+    let investors = env.register(investors_wasm::WASM, (hub_addr.clone(),));
+    let country = env.register(country_wasm::WASM, (hub_addr.clone(),));
+    hub.set_module_addr(&Symbol::new(&env, "max_investors"), &investors);
+    hub.set_module_addr(&Symbol::new(&env, "country_restrict"), &country);
+
+    // token A: country_restrict [US] + max_investors cap 1 (both identity-dependent -> ONE identity)
+    let ta = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env, 840u32],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
+            max_investors: 1,
+        })
+        .token;
+    // token B: max_investors cap 2 only
+    let tb = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
+            max_investors: 2,
+        })
+        .token;
+
+    // token A shares ONE identity across country_restrict + max_investors
+    let id_a = identity_wasm::Client::new(&env, &hub.identity(&ta));
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    id_a.set_country(&alice, &840);
+    id_a.set_country(&bob, &840);
+    let tok_a = token_wasm::Client::new(&env, &ta);
+    tok_a.mint(&alice, &10); // US holder 1 (cap 1)
+    assert!(tok_a.try_mint(&bob, &10).is_err()); // US full at 1 on token A
+    assert_eq!(hub.investor_count(&ta, &840), 1);
+    // token B independent (cap 2, its own identity)
+    let id_b = identity_wasm::Client::new(&env, &hub.identity(&tb));
+    id_b.set_country(&alice, &840);
+    let tok_b = token_wasm::Client::new(&env, &tb);
+    tok_b.mint(&alice, &10); // ok on B
+    assert_eq!(hub.investor_count(&tb, &840), 1);
+}
+
+// Same negative-auth pattern as the other forwarders: `set_investor_cap` is gated on
+// `TokenAdmin(token).require_auth()` (the token's own issuer), not any caller.
+#[test]
+#[should_panic(expected = "Error(Auth, InvalidAction)")]
+fn only_token_admin_can_set_investor_cap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (hub, hub_addr) = deploy_hub(&env);
+    let token_hash: BytesN<32> = env.deployer().upload_contract_wasm(token_wasm::WASM);
+    hub.set_token_wasm(&token_hash);
+    let identity_hash: BytesN<32> = env.deployer().upload_contract_wasm(identity_wasm::WASM);
+    hub.set_identity_wasm(&identity_hash);
+    let investors = env.register(investors_wasm::WASM, (hub_addr.clone(),));
+    hub.set_module_addr(&Symbol::new(&env, "max_investors"), &investors);
+    let t = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env],
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
+            max_investors: 1,
+        })
+        .token;
+    env.set_auths(&[]);
+    hub.set_investor_cap(&t, &5);
 }

@@ -5,7 +5,7 @@
 
 use constella_module_interface::{
     CountryRestrictClient, DenylistClient, LockupClient, MaxBalanceClient, MaxHoldersClient,
-    ModuleClient, TransferWindowClient,
+    MaxInvestorsClient, ModuleClient, TransferWindowClient,
 };
 use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, BytesN, Env, Symbol, Vec};
 
@@ -33,6 +33,7 @@ pub struct LaunchConfig {
     pub max_holders: u32,           // 0 = not selected
     pub lockup: u64,                // 0 = not selected
     pub transfer_window: bool,
+    pub max_investors: u32, // 0 = not selected
 }
 
 #[contracttype]
@@ -125,7 +126,9 @@ impl Hub {
             }
             MaxBalanceClient::new(&env, &m).set_max(&token, &config.max_balance);
         }
-        if !config.country_restrict.is_empty() {
+        // Deploy ONE identity per token if any identity-dependent module is selected,
+        // so country_restrict and max_investors share it.
+        if !config.country_restrict.is_empty() || config.max_investors > 0 {
             let identity_hash: BytesN<32> = env
                 .storage()
                 .instance()
@@ -135,6 +138,13 @@ impl Hub {
             env.storage()
                 .persistent()
                 .set(&DataKey::Identity(token.clone()), &identity);
+        }
+        if !config.country_restrict.is_empty() {
+            let identity: Address = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Identity(token.clone()))
+                .unwrap();
             let m = Self::module_addr(&env, "country_restrict");
             for h in [hooks::CAN_CREATE, hooks::CAN_TRANSFER] {
                 Self::register(&env, &token, &Symbol::new(&env, h), &m);
@@ -170,6 +180,24 @@ impl Hub {
             for h in [hooks::CAN_CREATE, hooks::CAN_TRANSFER] {
                 Self::register(&env, &token, &Symbol::new(&env, h), &m);
             }
+        }
+        if config.max_investors > 0 {
+            let identity: Address = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Identity(token.clone()))
+                .unwrap();
+            let m = Self::module_addr(&env, "max_investors");
+            for h in [
+                hooks::CAN_CREATE,
+                hooks::CAN_TRANSFER,
+                hooks::CREATED,
+                hooks::TRANSFERRED,
+                hooks::DESTROYED,
+            ] {
+                Self::register(&env, &token, &Symbol::new(&env, h), &m);
+            }
+            MaxInvestorsClient::new(&env, &m).configure(&token, &identity, &config.max_investors);
         }
         LaunchResult { token }
     }
@@ -318,6 +346,18 @@ impl Hub {
     }
     pub fn transfer_window(env: Env, token: Address) -> (Option<u64>, Option<u64>) {
         TransferWindowClient::new(&env, &Self::module_addr(&env, "transfer_window")).window(&token)
+    }
+    pub fn set_investor_cap(env: Env, token: Address, cap: u32) {
+        Self::require_token_admin(&env, &token);
+        MaxInvestorsClient::new(&env, &Self::module_addr(&env, "max_investors"))
+            .set_cap(&token, &cap);
+    }
+    pub fn investor_cap(env: Env, token: Address) -> u32 {
+        MaxInvestorsClient::new(&env, &Self::module_addr(&env, "max_investors")).cap(&token)
+    }
+    pub fn investor_count(env: Env, token: Address, country: u32) -> u32 {
+        MaxInvestorsClient::new(&env, &Self::module_addr(&env, "max_investors"))
+            .count(&token, &country)
     }
 }
 
