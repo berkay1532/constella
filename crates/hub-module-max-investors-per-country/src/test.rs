@@ -60,3 +60,57 @@ fn configure_requires_hub_auth() {
     let (m, _hub) = setup(&env);
     m.configure(&Address::generate(&env), &Address::generate(&env), &1);
 }
+
+// The mirror's whole purpose is to track holder transitions on the POST-events. A same-country
+// full transfer must keep the per-country count flat (one holder exits as another joins), and a
+// burn that empties a holder must decrement the count. Exercises `transferred` and `destroyed`
+// directly (the hub e2e is mint-only and never drives these paths).
+#[test]
+fn transfer_and_burn_update_per_country_count() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (m, _hub) = setup(&env);
+    let admin = Address::generate(&env);
+    let id = env.register(IdentityMock, (admin.clone(),));
+    let t = Address::generate(&env);
+    m.configure(&t, &id, &5);
+    let idc = IdentityMockClient::new(&env, &id);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    idc.set_country(&alice, &US);
+    idc.set_country(&bob, &US);
+
+    m.created(&alice, &100, &t);
+    assert_eq!(m.count(&t, &US), 1);
+    // net-zero same-country full transfer: alice fully exits (count -1), bob joins (count +1) -> flat at 1
+    m.transferred(&alice, &bob, &100, &t);
+    assert_eq!(m.count(&t, &US), 1);
+    // burn bob's whole balance -> bob crosses to 0 -> US count drops to 0
+    m.destroyed(&bob, &100, &t);
+    assert_eq!(m.count(&t, &US), 0);
+}
+
+// The net-zero exemption in `can_transfer`: at a full per-country cap, a full same-country
+// transfer to a new holder is allowed (the slot the sender frees offsets the one the recipient
+// takes), while a PARTIAL transfer — where the sender keeps a balance and the recipient is a
+// fresh holder — is denied because it would consume a slot beyond the cap.
+#[test]
+fn can_transfer_net_zero_exemption_at_cap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (m, _hub) = setup(&env);
+    let admin = Address::generate(&env);
+    let id = env.register(IdentityMock, (admin.clone(),));
+    let t = Address::generate(&env);
+    m.configure(&t, &id, &1); // cap 1
+    let idc = IdentityMockClient::new(&env, &id);
+    let alice = Address::generate(&env);
+    let carol = Address::generate(&env);
+    idc.set_country(&alice, &US);
+    idc.set_country(&carol, &US);
+    m.created(&alice, &100, &t); // US count 1 (at cap)
+    // full transfer alice->carol (same country): net-zero -> allowed even at cap
+    assert!(m.can_transfer(&alice, &carol, &100, &t));
+    // partial transfer: alice keeps a balance, carol would be a NEW holder -> exceeds cap 1 -> denied
+    assert!(!m.can_transfer(&alice, &carol, &40, &t));
+}
