@@ -40,7 +40,7 @@ All three require the platform admin's auth.
 ## `launch`: one-signature token deployment
 
 ```
-launch(config: LaunchConfig { admin, denylist, max_balance, country_restrict, max_holders, lockup, transfer_window }) -> LaunchResult { token }
+launch(config: LaunchConfig { admin, denylist, max_balance, country_restrict, max_holders, lockup, transfer_window, max_investors }) -> LaunchResult { token }
 ```
 
 Requires only `config.admin.require_auth()` — the new issuer's signature. It:
@@ -74,16 +74,30 @@ Requires only `config.admin.require_auth()` — the new issuer's signature. It:
    needs no post-event hooks. No config call is made at launch: a fresh registration starts
    unpaused with an all-time-open window; the issuer opts into pausing/windowing later via the
    forwarders below.
+9. If `max_investors > 0` (0 means "not selected"), registers the shared MaxInvestorsPerCountry
+   module against **all 5 hooks** (it needs the post-events to keep its per-holder balance mirror
+   and per-country holder count in sync), then calls
+   `MaxInvestorsClient::configure(token, identity, max_investors)` to point the shared module at
+   this token's identity and per-country cap. Like `country_restrict`, it is identity-dependent —
+   it reads each holder's country to bucket the count. **When a token selects both
+   `country_restrict` and `max_investors`, the two share the single per-token identity instance:**
+   `launch` deploys the identity **once** if either identity-dependent module is selected (see the
+   hoisted deploy in `src/lib.rs`), then both modules are configured against that same
+   `Identity(token)`. A token selecting only `max_investors` still gets its own dedicated identity
+   instance, same as the country-restrict-only case.
 
 ## Per-token identity model
 
 Unlike denylist/MaxBalance (whose *module* is shared but whose *state* is merely keyed by
-token), `country_restrict` also gets a **dedicated identity instance per token**, deployed at
-`launch` time. This is deliberate: an account's attested country is a claim made *about that
-person, for that token's compliance context* — token A's issuer attesting "this account is
-US-resident" should never leak into or be confused with token B's issuer's own attestation of
-the same real-world person. Two tokens sharing one `country_restrict` module instance still
-get fully independent identity data because:
+token), the **identity-dependent** modules — `country_restrict` and `max_investors` — get a
+**dedicated identity instance per token**, deployed at `launch` time. This is deliberate: an
+account's attested country is a claim made *about that person, for that token's compliance
+context* — token A's issuer attesting "this account is US-resident" should never leak into or be
+confused with token B's issuer's own attestation of the same real-world person. A token that
+selects both identity-dependent modules gets **one** shared identity instance (the deploy is
+hoisted in `launch`), so `country_restrict` and `max_investors` read the same attestations for
+that token. Two tokens sharing one `country_restrict`/`max_investors` module instance still get
+fully independent identity data because:
 
 - Each token's identity is its own deployed contract instance (own storage, own admin — that
   token's issuer).
@@ -154,10 +168,16 @@ hold a module's address or auth directly:
   then calls `TransferWindowClient::set_window` to (re)configure that token's open interval.
 - `is_paused(token) -> bool` / `transfer_window(token) -> (Option<u64>, Option<u64>)` —
   unauthenticated read passthroughs.
+- `set_investor_cap(token, cap)` — requires `TokenAdmin(token).require_auth()`, then calls the
+  shared MaxInvestorsPerCountry module via `MaxInvestorsClient::set_cap` to change that token's
+  per-country holder cap after launch.
+- `investor_cap(token) -> u32` / `investor_count(token, country) -> u32` — unauthenticated read
+  passthroughs (configured per-country cap / current distinct-holder count for a country).
 
 This is the hub's single auth surface for per-token module administration: each module itself
 (`hub-module-denylist`, `hub-module-max-balance`, `hub-module-country-restrict`,
-`hub-module-max-holders`, `hub-module-lockup`, `hub-module-transfer-window`) trusts only the
+`hub-module-max-holders`, `hub-module-lockup`, `hub-module-transfer-window`,
+`hub-module-max-investors-per-country`) trusts only the
 hub's own `require_auth()` (see their READMEs), and the hub gates that trust per-token via
 `TokenAdmin`. All forwarder families resolve their module address through the same private
 `module_addr(env, kind)` helper — a single lookup shared by every module kind, rather than one
@@ -166,7 +186,8 @@ hand-written accessor per module.
 ## Build-order note
 
 Hub tests `contractimport!` the built token, denylist, max-balance, country-restrict,
-identity-mock, max-holders, lockup, and transfer-window Wasm (see `src/test.rs`), so
+identity-mock, max-holders, lockup, transfer-window, and max-investors-per-country Wasm (see
+`src/test.rs`), so
 `stellar contract build` must run **before** `cargo test -p constella-hub` — a plain
 `cargo test` against stale or missing Wasm artifacts will fail to compile the test module or
 exercise stale contract code:
@@ -180,7 +201,7 @@ cargo test -p constella-hub
 
 The hub depends only on `constella-module-interface` (`ModuleClient`, `DenylistClient`,
 `MaxBalanceClient`, `CountryRestrictClient`, `MaxHoldersClient`, `LockupClient`,
-`TransferWindowClient`) for cross-contract calls — never on a concrete module or token
+`TransferWindowClient`, `MaxInvestorsClient`) for cross-contract calls — never on a concrete module or token
 `#[contract]` crate. This keeps the hub decoupled from every module's implementation; it only
 needs the shared ABI. The per-token identity instances the hub deploys (see "Per-token identity
 model" above) are likewise reached only by `Address` (`deploy_v2` against a
