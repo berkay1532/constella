@@ -25,7 +25,7 @@ function launchConfigScVal(cfg) {
 const cfg = {
   admin: 'GDXK5YGKCYYQYIEGWQNVTQXN7MK6VDDCA5UV4ZYP7TWWEGTMVSW3VIFC',
   denylist: true, max_balance: '1000', country_restrict: [840, 276],
-  max_holders: 5, lockup: '3600', transfer_window: false, max_investors: 2,
+  max_holders: 5, lockup: 3600, transfer_window: false, max_investors: 2,
 };
 const sv = launchConfigScVal(cfg);
 const keys = sv.map().map((en) => en.key().sym().toString());

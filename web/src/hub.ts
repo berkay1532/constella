@@ -1,4 +1,4 @@
-import { xdr, nativeToScVal, scValToNative, TransactionBuilder, rpc, Account } from '@stellar/stellar-sdk';
+import { xdr, nativeToScVal, scValToNative, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
 import { server, NP, buildFrom, addr, i128, type SignFn } from './stellar';
 import hub from './hub.testnet.json';
 
@@ -49,12 +49,19 @@ export async function launchToken(cfg: LaunchConfig, sign: SignFn): Promise<{ to
   const signedXDR = await sign(prepared.toXDR());
   const sent = await server.sendTransaction(TransactionBuilder.fromXDR(signedXDR, NP));
   if (sent.status === 'ERROR') throw new Error('launch submit error');
-  let got = await server.getTransaction(sent.hash);
-  for (let i = 0; i < 30 && got.status === rpc.Api.GetTransactionStatus.NOT_FOUND; i++) {
-    await sleep(1000);
+  let got;
+  try {
     got = await server.getTransaction(sent.hash);
+    for (let i = 0; i < 30 && got.status === rpc.Api.GetTransactionStatus.NOT_FOUND; i++) {
+      await sleep(1000);
+      got = await server.getTransaction(sent.hash);
+    }
+  } catch (e) {
+    throw new Error(`launch submitted (tx ${sent.hash}) but the result could not be read: ${String((e as Error).message || e)}`);
   }
-  if (got.status !== rpc.Api.GetTransactionStatus.SUCCESS) throw new Error(`launch did not succeed: ${got.status}`);
+  if (got.status !== rpc.Api.GetTransactionStatus.SUCCESS) {
+    throw new Error(`launch did not succeed: ${got.status} (tx ${sent.hash})`);
+  }
   const result = scValToNative(got.returnValue!) as { token: string };
   return { token: result.token, hash: sent.hash };
 }
