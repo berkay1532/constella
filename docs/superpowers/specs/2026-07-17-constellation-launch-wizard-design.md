@@ -123,3 +123,15 @@ Loads the token's config from `localStorage` (falls back to reading on-chain mod
 6. **Live testnet verification** — bootstrap + end-to-end launch + console rejection, record hashes.
 
 Each step is independently testable (a working, buildable frontend after each).
+
+---
+
+## SP2 — live testnet evidence (platform stack)
+
+The platform bootstrap (Task 1) deployed the shared Hub + all 7 modules to testnet and committed their IDs to `web/src/hub.testnet.json` (hub `CBKJR7KRQWWGL7CGCEOYMRECGGPH5O3RUKOL37GWWKJ5IJQ7HP5BAQCG`). End-to-end verification against that exact committed stack — the same hub the browser wizard calls:
+
+- **One-signature launch** (`country_restrict:[US 840] + max_investors:1`): tx [`b5537793…`](https://stellar.expert/explorer/testnet/tx/b55377934aa7e07823b57da3f26317bf8dbeb2d537b68125c0f72b289796a941) → token `CAJPOSVCZPBBILJRP3JZE54SVAAZDAZNKMCXVTBUOTOCLQ3JT4SETSAD`, `investor_cap = 1`.
+- The hub deployed a per-token identity (`CBRNAIBE…RQVV`); the issuer attested two accounts as US(840) on it.
+- Mint to the 1st US holder passed (`investor_count(US) = 1`); mint to the 2nd **reverted** (per-country cap 1); `set_investor_cap(token, 2)` via the forwarder then let the 2nd through (`investor_count(US) = 2`). Restrictions enforce live, driven by the same forwarders the console UI calls.
+
+Frontend gates: `npm run verify:launch` (LaunchConfig ScVal encoder golden) ✅, `tsc --noEmit` clean, `vite build` clean. The `launchConfigScVal` encoding is byte-correct against the Rust `LaunchConfig` struct (reviewed field-by-field). Browser Freighter click-through (wizard → console) is the final human verification step, run against this same bootstrapped hub.
