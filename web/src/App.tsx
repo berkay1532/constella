@@ -8,23 +8,25 @@ import { useWallet } from './wallet';
 export function App() {
   const { address, connect, busy } = useWallet();
   return (
-    <div className="wrap">
+    <>
       <nav className="topnav">
-        <Link to="/" className="brand">✨ Constella</Link>
+        <Link to="/" className="brand"><span className="mark">✦</span> Constella</Link>
         <div className="navlinks">
           <Link to="/launch">Launch</Link>
-          <Link to="/zk">ZK demo</Link>
+          <Link to="/zk">Privacy</Link>
           {address
             ? <span className="pill">{address.slice(0, 4)}…{address.slice(-4)}</span>
-            : <button className="send" onClick={connect} disabled={busy}>Connect</button>}
+            : <button className="btn sm ghost" onClick={connect} disabled={busy}>Connect wallet</button>}
         </div>
       </nav>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/launch" element={<LaunchWizard />} />
-        <Route path="/token/:id" element={<TokenConsole />} />
-        <Route path="/zk" element={<LegacyDemo />} />
-      </Routes>
-    </div>
+      <div className="wrap">
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/launch" element={<LaunchWizard />} />
+          <Route path="/token/:id" element={<TokenConsole />} />
+          <Route path="/zk" element={<LegacyDemo />} />
+        </Routes>
+      </div>
+    </>
   );
 }
