@@ -234,3 +234,12 @@ The per-token identity mechanic enforces a country allow-list live:
 Both enforce per token, live, from one launch:
 - **One-signature launch** (`max_holders: 1, transfer_window: true`): tx [`849d7b3d…`](https://stellar.expert/explorer/testnet/tx/849d7b3dc1261b2824df61b4fa23f8afcc9feb05b14fd3d3f1cc85770daff701).
 - Minting a 1st holder passed (`holders = 1`); minting a 2nd holder **reverted** (MaxHolders cap 1). Then `hub.pause(token)` (`is_paused = true`) made a mint **revert** (frozen), and `hub.unpause(token)` let it pass again — the shared modules enforce and the issuer's forwarders drive per-token config, live.
+
+## Live testnet evidence — MaxInvestorsPerCountry + shared per-token identity (completes 7/7)
+
+The last module combines the stateful mirror and the per-token identity, and the launch proves the **shared-identity** design: one token opted into BOTH `country_restrict` and `max_investors`, and a single identity instance served both.
+- **One-signature launch** (`country_restrict: [840], max_investors: 1`): tx [`f0e11b8e…`](https://stellar.expert/explorer/testnet/tx/f0e11b8e3b122dd3731e1ecdfd7ff8a49b62f24555281ce964f74bd986247475) → token `CCDP3HURWJPLFYQ4OZPA6YY7UMNA5ZNZO3HKCPEB6HJVOOU6FGWCT4C5`, `investor_cap = 1`.
+- The hub deployed **one** identity for the token (read back via `hub.identity(token)` → `CBKNFJBEVAWYA3RFNGHR6RL5ZC62L6ADOBP7QP7IYUSQGINTTRMDZKIH`); the issuer attested `alice = US(840)` and `bob = US(840)` on it. That the attestation drove the MaxInvestors count proves both modules read the **same** identity.
+- Minting to alice passed (`investor_count(US) = 1`); minting to bob **reverted** (2nd US holder, per-country cap 1). Then `hub.set_investor_cap(token, 2)` bumped the cap and bob's mint **passed** (`investor_count(US) = 2`) — the shared MaxInvestors instance enforces per (token, country), live, and the issuer's forwarder drives the cap.
+
+All 7 modules are now proven live on testnet from one-signature launches.
