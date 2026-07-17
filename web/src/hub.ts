@@ -1,5 +1,5 @@
-import { xdr, nativeToScVal, scValToNative, TransactionBuilder, rpc } from '@stellar/stellar-sdk';
-import { server, NP, buildFrom, addr, i128, type SignFn } from './stellar';
+import { xdr, nativeToScVal, scValToNative, TransactionBuilder, rpc, Account } from '@stellar/stellar-sdk';
+import { server, NP, buildFrom, addr, i128, signSendPoll, type SignFn } from './stellar';
 import hub from './hub.testnet.json';
 
 export { hub };
@@ -64,4 +64,64 @@ export async function launchToken(cfg: LaunchConfig, sign: SignFn): Promise<{ to
   }
   const result = scValToNative(got.returnValue!) as { token: string };
   return { token: result.token, hash: sent.hash };
+}
+
+// --- Token console: mint, attest identity, manage caps/pause/denylist, and read live state. ---
+
+const HUB = hub.hub;
+const scAddr = (a: string) => addr(a) as unknown as xdr.ScVal;
+
+// Read-only simulation needs a validly-formatted ed25519 (G-) source account; the RPC does not
+// require it to be funded. The all-zero "null" account is the standard placeholder. (A contract
+// C-address would be rejected by `new Account`, which validates an ed25519 public key.)
+const SIM_SOURCE = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF5';
+async function sim(contractId: string, method: string, args: xdr.ScVal[]) {
+  const acc = new Account(SIM_SOURCE, '0');
+  const tx = buildFrom(acc, contractId, method, args as unknown as ReturnType<typeof addr>[]);
+  return server.simulateTransaction(tx);
+}
+
+async function invoke(from: string, contractId: string, method: string, args: xdr.ScVal[], sign: SignFn, step: string) {
+  const acc = await server.getAccount(from);
+  const tx = buildFrom(acc, contractId, method, args as unknown as ReturnType<typeof addr>[]);
+  return signSendPoll(tx, sign, step);
+}
+
+export const mint = (from: string, token: string, to: string, amount: string, sign: SignFn) =>
+  invoke(from, token, 'mint', [scAddr(to), i128(amount) as unknown as xdr.ScVal], sign, 'mint');
+
+export async function readIdentity(token: string): Promise<string> {
+  const s = await sim(HUB, 'identity', [scAddr(token)]);
+  if (rpc.Api.isSimulationError(s)) throw new Error('no identity for this token');
+  return scValToNative(s.result!.retval) as string;
+}
+export async function attestCountry(from: string, token: string, account: string, code: number, sign: SignFn) {
+  const identity = await readIdentity(token);
+  return invoke(from, identity, 'set_country', [scAddr(account), u32(code)], sign, 'set_country');
+}
+
+export const setInvestorCap = (from: string, token: string, cap: number, sign: SignFn) =>
+  invoke(from, HUB, 'set_investor_cap', [scAddr(token), u32(cap)], sign, 'set_investor_cap');
+export const setMaxBalance = (from: string, token: string, cap: string, sign: SignFn) =>
+  invoke(from, HUB, 'set_max_balance', [scAddr(token), i128(cap) as unknown as xdr.ScVal], sign, 'set_max_balance');
+export const setMaxHolders = (from: string, token: string, cap: number, sign: SignFn) =>
+  invoke(from, HUB, 'set_max_holders', [scAddr(token), u32(cap)], sign, 'set_max_holders');
+export const pauseToken = (from: string, token: string, sign: SignFn) =>
+  invoke(from, HUB, 'pause', [scAddr(token)], sign, 'pause');
+export const unpauseToken = (from: string, token: string, sign: SignFn) =>
+  invoke(from, HUB, 'unpause', [scAddr(token)], sign, 'unpause');
+export const addToDenylist = (from: string, token: string, account: string, sign: SignFn) =>
+  invoke(from, HUB, 'add_to_denylist', [scAddr(token), scAddr(account)], sign, 'add_to_denylist');
+
+export async function readInvestorCount(token: string, country: number): Promise<string> {
+  const s = await sim(HUB, 'investor_count', [scAddr(token), u32(country)]);
+  return rpc.Api.isSimulationError(s) ? '—' : String(scValToNative(s.result!.retval));
+}
+export async function readIsDenied(token: string, account: string): Promise<boolean> {
+  const s = await sim(HUB, 'is_denied', [scAddr(token), scAddr(account)]);
+  return rpc.Api.isSimulationError(s) ? false : scValToNative(s.result!.retval) === true;
+}
+export async function readTokenBalance(token: string, account: string): Promise<string> {
+  const s = await sim(token, 'balance', [scAddr(account)]);
+  return rpc.Api.isSimulationError(s) ? '0' : String(scValToNative(s.result!.retval));
 }
