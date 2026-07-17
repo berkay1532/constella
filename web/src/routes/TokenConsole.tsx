@@ -3,8 +3,8 @@ import { useParams } from 'react-router-dom';
 import { useWallet } from '../wallet';
 import { getToken } from '../tokenStore';
 import {
-  mint, attestCountry, readIdentity, readInvestorCount, readTokenBalance,
-  setInvestorCap, pauseToken, unpauseToken, addToDenylist,
+  mint, attestCountry, readIdentity, readInvestorCount, readTokenBalance, readIsDenied,
+  setInvestorCap, setMaxBalance, setMaxHolders, pauseToken, unpauseToken, addToDenylist,
 } from '../hub';
 
 const EXPLORER = 'https://stellar.expert/explorer/testnet';
@@ -21,6 +21,8 @@ export function TokenConsole() {
   const [attCode, setAttCode] = useState('840');
   const [identity, setIdentity] = useState('');
   const [bal, setBal] = useState('');
+  const [mbCap, setMbCap] = useState('0');
+  const [mhCap, setMhCap] = useState(0);
 
   const cfg = rec?.config;
   useEffect(() => { if (cfg && (cfg.country_restrict.length || cfg.max_investors)) readIdentity(id).then(setIdentity).catch(() => {}); }, [id, cfg]);
@@ -32,6 +34,11 @@ export function TokenConsole() {
     setMsg(`${label}…`); setErr('');
     try { const h = await fn(); setMsg(`${label} ✓${typeof h === 'string' ? ` (${h.slice(0,8)}…)` : ''}`); }
     catch (e) { setErr(`${label} rejected: ${String((e as Error).message || e)}`); setMsg(''); }
+  };
+
+  const read = async (label: string, fn: () => Promise<string>) => {
+    setErr('');
+    try { setBal(await fn()); } catch (e) { setErr(`${label} failed: ${String((e as Error).message || e)}`); }
   };
 
   return (
@@ -60,7 +67,7 @@ export function TokenConsole() {
       {cfg.max_investors > 0 && (
         <><h3>Max investors</h3>
           <button className="send" onClick={() => run('Set cap 2', () => setInvestorCap(address, id, 2, sign))}>Set per-country cap = 2</button>{' '}
-          <button className="send" onClick={async () => setBal(await readInvestorCount(id, Number(attCode || 840)))}>Read count</button>
+          <button className="send" onClick={() => read('Read count', () => readInvestorCount(id, Number(attCode || 840)))}>Read count</button>
           {bal && <span className="pill">count({attCode})={bal}</span>}</>
       )}
 
@@ -73,12 +80,25 @@ export function TokenConsole() {
       {cfg.denylist && (
         <><h3>Denylist</h3>
           <div className="field"><input placeholder="account G…" value={attAcct} onChange={(e) => setAttAcct(e.target.value)} />
-            <button className="send" onClick={() => run('Denylist', () => addToDenylist(address, id, attAcct, sign))}>Add to denylist</button></div></>
+            <button className="send" onClick={() => run('Denylist', () => addToDenylist(address, id, attAcct, sign))}>Add to denylist</button>{' '}
+            <button className="send" onClick={() => read('Is denied', async () => String(await readIsDenied(id, attAcct)))}>Check is_denied</button></div></>
+      )}
+
+      {cfg.max_balance !== '0' && (
+        <><h3>Max balance</h3>
+          <div className="field"><input value={mbCap} onChange={(e) => setMbCap(e.target.value)} placeholder="new per-holder cap" />
+            <button className="send" onClick={() => run('Set max balance', () => setMaxBalance(address, id, mbCap, sign))}>Set max balance</button></div></>
+      )}
+
+      {cfg.max_holders > 0 && (
+        <><h3>Max holders</h3>
+          <div className="field"><input type="number" value={mhCap} onChange={(e) => setMhCap(Number(e.target.value))} placeholder="new holder cap" />
+            <button className="send" onClick={() => run('Set max holders', () => setMaxHolders(address, id, mhCap, sign))}>Set max holders</button></div></>
       )}
 
       <h3>Read balance</h3>
       <div className="field"><input placeholder="account G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
-        <button className="send" onClick={async () => setBal(await readTokenBalance(id, mintTo))}>Read</button>{bal && <span className="pill">{bal}</span>}</div>
+        <button className="send" onClick={() => read('Read balance', () => readTokenBalance(id, mintTo))}>Read</button>{bal && <span className="pill">{bal}</span>}</div>
 
       {msg && <div className="result">{msg}</div>}
       {err && <div className="result denied">{err}</div>}

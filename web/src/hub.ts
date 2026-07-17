@@ -1,5 +1,5 @@
 import { xdr, nativeToScVal, scValToNative, TransactionBuilder, rpc, Account } from '@stellar/stellar-sdk';
-import { server, NP, buildFrom, addr, i128, signSendPoll, type SignFn } from './stellar';
+import { server, NP, buildFrom, addr, i128, signSendPoll, deployed, type SignFn } from './stellar';
 import hub from './hub.testnet.json';
 
 export { hub };
@@ -71,10 +71,10 @@ export async function launchToken(cfg: LaunchConfig, sign: SignFn): Promise<{ to
 const HUB = hub.hub;
 const scAddr = (a: string) => addr(a) as unknown as xdr.ScVal;
 
-// Read-only simulation needs a validly-formatted ed25519 (G-) source account; the RPC does not
-// require it to be funded. The all-zero "null" account is the standard placeholder. (A contract
-// C-address would be rejected by `new Account`, which validates an ed25519 public key.)
-const SIM_SOURCE = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF5';
+// Read-only simulation needs a validly-formatted, existing ed25519 (G-) source account; the RPC
+// does not require it to be the caller or even funded for a read-only sim. Reuse the already-valid,
+// already-funded admin account that `stellar.ts` uses for its own simulations.
+const SIM_SOURCE = deployed.accounts.admin;
 async function sim(contractId: string, method: string, args: xdr.ScVal[]) {
   const acc = new Account(SIM_SOURCE, '0');
   const tx = buildFrom(acc, contractId, method, args as unknown as ReturnType<typeof addr>[]);
