@@ -124,3 +124,12 @@ pub trait TransferWindowAdmin {
     fn is_paused(env: Env, token: Address) -> bool;
     fn window(env: Env, token: Address) -> (Option<u64>, Option<u64>);
 }
+
+/// Config surface of the multi-tenant MaxInvestorsPerCountry module, called by the hub. Token-keyed.
+#[contractclient(name = "MaxInvestorsClient")]
+pub trait MaxInvestorsAdmin {
+    fn configure(env: Env, token: Address, identity: Address, cap: u32);
+    fn set_cap(env: Env, token: Address, cap: u32);
+    fn cap(env: Env, token: Address) -> u32;
+    fn count(env: Env, token: Address, country: u32) -> u32;
+}
