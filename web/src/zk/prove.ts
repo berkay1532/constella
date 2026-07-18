@@ -3,8 +3,6 @@ import type { SnarkProof } from './encode';
 
 const WASM_URL = '/zk/country_eligibility.wasm';
 const ZKEY_URL = '/zk/country_eligibility_final.zkey';
-// Must match the on-chain policy set via set_policy.
-const ALLOWED = ['840', '276'];
 
 export class IneligibleError extends Error {
   constructor(options?: { cause?: unknown }) {
@@ -42,8 +40,9 @@ function isUnsatisfiableWitness(e: unknown): boolean {
 export async function generateProof(
   country: number,
   secret: bigint,
+  allowed: string[],
 ): Promise<{ proof: SnarkProof; commitment: string }> {
-  const input = { country: String(country), secret: secret.toString(), allowed: ALLOWED };
+  const input = { country: String(country), secret: secret.toString(), allowed };
   let result;
   try {
     result = await groth16.fullProve(input, WASM_URL, ZKEY_URL);

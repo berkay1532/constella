@@ -4,8 +4,9 @@
 //! that deploys the token (pointed at this hub) and wires the selected shared modules.
 
 use constella_module_interface::{
-    CountryRestrictClient, DenylistClient, LockupClient, MaxBalanceClient, MaxHoldersClient,
-    MaxInvestorsClient, ModuleClient, TransferWindowClient,
+    CountryRestrictClient, DenylistClient, IdentityZkAdminClient, LockupClient, MaxBalanceClient,
+    MaxHoldersClient, MaxInvestorsClient, ModuleClient, TransferWindowClient, VerificationKey,
+    ZkEligibilityClient,
 };
 use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, BytesN, Env, Symbol, Vec};
 
@@ -33,7 +34,8 @@ pub struct LaunchConfig {
     pub max_holders: u32,           // 0 = not selected
     pub lockup: u64,                // 0 = not selected
     pub transfer_window: bool,
-    pub max_investors: u32, // 0 = not selected
+    pub max_investors: u32,   // 0 = not selected
+    pub zk_eligibility: bool, // true = country eligibility is proven privately (ZK), not cleartext
 }
 
 #[contracttype]
@@ -52,6 +54,9 @@ enum DataKey {
     TokenAdmin(Address),      // token -> issuer
     Modules(Address, Symbol), // (token, hook) -> Vec<Address>
     Identity(Address),        // token -> its own per-token identity instance
+    Verifier,                 // shared Groth16 verifier for ZK eligibility
+    ZkIdentityWasm,           // wasm hash of the per-token ZK identity (module-identity-zk)
+    ZkVk,                     // shared Groth16 verifying key
 }
 
 #[contract]
@@ -73,6 +78,33 @@ impl Hub {
     pub fn set_identity_wasm(env: Env, hash: BytesN<32>) {
         Self::require_platform_admin(&env);
         env.storage().instance().set(&DataKey::IdentityWasm, &hash);
+    }
+
+    pub fn set_verifier(env: Env, verifier: Address) {
+        Self::require_platform_admin(&env);
+        env.storage().instance().set(&DataKey::Verifier, &verifier);
+    }
+
+    pub fn set_zk_identity_wasm(env: Env, hash: BytesN<32>) {
+        Self::require_platform_admin(&env);
+        env.storage()
+            .instance()
+            .set(&DataKey::ZkIdentityWasm, &hash);
+    }
+
+    pub fn set_zk_vk(env: Env, vk: VerificationKey) {
+        Self::require_platform_admin(&env);
+        env.storage().instance().set(&DataKey::ZkVk, &vk);
+    }
+
+    /// Whether an account has proven ZK eligibility for a token (reads the token's ZK identity).
+    pub fn is_verified(env: Env, token: Address, account: Address) -> bool {
+        let id: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Identity(token))
+            .unwrap();
+        IdentityZkAdminClient::new(&env, &id).is_verified(&account)
     }
 
     pub fn set_module_addr(env: Env, kind: Symbol, addr: Address) {
@@ -126,9 +158,34 @@ impl Hub {
             }
             MaxBalanceClient::new(&env, &m).set_max(&token, &config.max_balance);
         }
-        // Deploy ONE identity per token if any identity-dependent module is selected,
-        // so country_restrict and max_investors share it.
-        if !config.country_restrict.is_empty() || config.max_investors > 0 {
+        // Private (ZK) country eligibility: deploy a per-token ZK identity, set its policy to
+        // the chosen allowed set, and gate on is_verified — the country is never revealed.
+        // A ZK token's identity IS the ZK identity, so the cleartext country_restrict /
+        // max_investors blocks below are skipped (mutual exclusion).
+        if config.zk_eligibility {
+            let zk_hash: BytesN<32> = env
+                .storage()
+                .instance()
+                .get(&DataKey::ZkIdentityWasm)
+                .unwrap();
+            let verifier: Address = env.storage().instance().get(&DataKey::Verifier).unwrap();
+            let vk: VerificationKey = env.storage().instance().get(&DataKey::ZkVk).unwrap();
+            let identity = Self::deploy(&env, &zk_hash, (config.admin.clone(), verifier));
+            IdentityZkAdminClient::new(&env, &identity).set_policy(&vk, &config.country_restrict);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Identity(token.clone()), &identity);
+            let m = Self::module_addr(&env, "zk_eligibility");
+            for h in [hooks::CAN_CREATE, hooks::CAN_TRANSFER] {
+                Self::register(&env, &token, &Symbol::new(&env, h), &m);
+            }
+            ZkEligibilityClient::new(&env, &m).configure(&token, &identity);
+        }
+        // Deploy ONE cleartext identity per token if any cleartext identity-dependent module is
+        // selected, so country_restrict and max_investors share it. Skipped for ZK tokens.
+        if !config.zk_eligibility
+            && (!config.country_restrict.is_empty() || config.max_investors > 0)
+        {
             let identity_hash: BytesN<32> = env
                 .storage()
                 .instance()
@@ -139,7 +196,7 @@ impl Hub {
                 .persistent()
                 .set(&DataKey::Identity(token.clone()), &identity);
         }
-        if !config.country_restrict.is_empty() {
+        if !config.zk_eligibility && !config.country_restrict.is_empty() {
             let identity: Address = env
                 .storage()
                 .persistent()
@@ -181,7 +238,7 @@ impl Hub {
                 Self::register(&env, &token, &Symbol::new(&env, h), &m);
             }
         }
-        if config.max_investors > 0 {
+        if !config.zk_eligibility && config.max_investors > 0 {
             let identity: Address = env
                 .storage()
                 .persistent()

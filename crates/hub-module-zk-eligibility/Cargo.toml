@@ -1,5 +1,5 @@
 [package]
-name = "constella-zk-verifier"
+name = "constella-hub-module-zk-eligibility"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,8 +16,4 @@ constella-module-interface = { path = "../module-interface" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-ark-bls12-381 = "0.4.0"
-ark-serialize = "0.4.2"
-ark-ff = "0.4.2"
-ark-ec = "0.4.2"
-serde_json = "1"
+constella-identity-mock = { path = "../identity-mock" }

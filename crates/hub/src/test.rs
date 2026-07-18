@@ -1,8 +1,10 @@
 #![cfg(test)]
 use crate::{Hub, HubClient, LaunchConfig};
+use constella_module_interface::VerificationKey;
 use soroban_sdk::{
+    crypto::bls12_381::{Bls12381G1Affine as G1Affine, Bls12381G2Affine as G2Affine},
     testutils::{Address as _, Ledger as _},
-    Address, BytesN, Env, Symbol,
+    Address, BytesN, Env, Symbol, Vec,
 };
 
 mod token_wasm {
@@ -50,6 +52,75 @@ mod investors_wasm {
         file = "../../target/wasm32v1-none/release/constella_hub_module_max_investors_per_country.wasm"
     );
 }
+mod zk_identity_wasm {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/constella_module_identity_zk.wasm"
+    );
+}
+mod verifier_wasm {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/constella_zk_verifier.wasm"
+    );
+}
+mod zkelig_wasm {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/constella_hub_module_zk_eligibility.wasm"
+    );
+}
+
+// A zero-filled VK is enough for these wiring tests: `set_policy` only STORES the vk, and the
+// verifier is never invoked for an unverified account (is_verified reads a flag). The full
+// proof-verification path is proven live on testnet.
+fn dummy_vk(env: &Env) -> VerificationKey {
+    VerificationKey {
+        alpha: G1Affine::from_array(env, &[0u8; 96]),
+        beta: G2Affine::from_array(env, &[0u8; 192]),
+        gamma: G2Affine::from_array(env, &[0u8; 192]),
+        delta: G2Affine::from_array(env, &[0u8; 192]),
+        ic: Vec::new(env),
+    }
+}
+
+// Launching with `zk_eligibility` deploys a per-token ZK identity, sets its policy, and wires the
+// zk_eligibility module on the pre-check hooks. Country stays private: gating is by is_verified,
+// which is false until a holder proves — so a mint to an un-proven account is rejected on-chain.
+// (The positive proof path is proven on testnet with a real Groth16 proof — see Task 7.)
+#[test]
+fn zk_eligibility_launch_wires_identity_and_gates_unverified() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (hub, hub_addr) = deploy_hub(&env);
+    let token_hash: BytesN<32> = env.deployer().upload_contract_wasm(token_wasm::WASM);
+    hub.set_token_wasm(&token_hash);
+    let zk_id_hash: BytesN<32> = env.deployer().upload_contract_wasm(zk_identity_wasm::WASM);
+    hub.set_zk_identity_wasm(&zk_id_hash);
+    let verifier = env.register(verifier_wasm::WASM, ());
+    hub.set_verifier(&verifier);
+    hub.set_zk_vk(&dummy_vk(&env));
+    let zkelig = env.register(zkelig_wasm::WASM, (hub_addr.clone(),));
+    hub.set_module_addr(&Symbol::new(&env, "zk_eligibility"), &zkelig);
+
+    let ta = hub
+        .launch(&LaunchConfig {
+            admin: Address::generate(&env),
+            denylist: false,
+            max_balance: 0,
+            country_restrict: soroban_sdk::vec![&env, 840u32, 276u32], // allowed set (the ZK policy)
+            max_holders: 0,
+            lockup: 0,
+            transfer_window: false,
+            max_investors: 0,
+            zk_eligibility: true,
+        })
+        .token;
+
+    // A per-token ZK identity was deployed and wired.
+    let _identity = hub.identity(&ta); // resolves (would panic if not deployed)
+    let alice = Address::generate(&env);
+    assert!(!hub.is_verified(&ta, &alice)); // no proof yet
+    let tok = token_wasm::Client::new(&env, &ta);
+    assert!(tok.try_mint(&alice, &10).is_err()); // not ZK-eligible -> mint rejected on-chain
+}
 
 fn deploy_hub(env: &Env) -> (HubClient<'static>, Address) {
     let admin = Address::generate(env);
@@ -79,6 +150,7 @@ fn launch_deploys_token_and_wires_denylist() {
         lockup: 0,
         transfer_window: false,
         max_investors: 0,
+        zk_eligibility: false,
     });
 
     assert_eq!(hub.token_admin(&res.token), issuer);
@@ -109,6 +181,7 @@ fn two_tokens_denylist_isolated_end_to_end() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     let tb = hub
@@ -121,6 +194,7 @@ fn two_tokens_denylist_isolated_end_to_end() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
 
@@ -164,6 +238,7 @@ fn only_token_admin_can_denylist() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     let bob = Address::generate(&env);
@@ -193,6 +268,7 @@ fn two_tokens_max_balance_isolated_end_to_end() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     let tb = hub
@@ -205,6 +281,7 @@ fn two_tokens_max_balance_isolated_end_to_end() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     let tok_a = token_wasm::Client::new(&env, &ta);
@@ -245,6 +322,7 @@ fn only_token_admin_can_set_max_balance() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     env.set_auths(&[]); // drop mocked auths -> the token's issuer did not authorize
@@ -279,6 +357,7 @@ fn two_tokens_country_restrict_isolated_end_to_end() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     let tb = hub
@@ -291,6 +370,7 @@ fn two_tokens_country_restrict_isolated_end_to_end() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
 
@@ -332,6 +412,7 @@ fn only_token_admin_can_set_country_allow() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     env.set_auths(&[]);
@@ -364,6 +445,7 @@ fn two_tokens_nonidentity_modules_isolated_end_to_end() {
             lockup: 0,
             transfer_window: true,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     let tb = hub
@@ -376,6 +458,7 @@ fn two_tokens_nonidentity_modules_isolated_end_to_end() {
             lockup: 0,
             transfer_window: true,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     let tok_a = token_wasm::Client::new(&env, &ta);
@@ -417,6 +500,7 @@ fn two_tokens_lockup_isolated_end_to_end() {
             lockup: 100,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     let tb = hub
@@ -429,6 +513,7 @@ fn two_tokens_lockup_isolated_end_to_end() {
             lockup: 0,
             transfer_window: false,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     let tok_a = token_wasm::Client::new(&env, &ta);
@@ -469,6 +554,7 @@ fn only_token_admin_can_pause() {
             lockup: 0,
             transfer_window: true,
             max_investors: 0,
+            zk_eligibility: false,
         })
         .token;
     env.set_auths(&[]);
@@ -505,6 +591,7 @@ fn two_tokens_max_investors_isolated_and_shares_identity() {
             lockup: 0,
             transfer_window: false,
             max_investors: 1,
+            zk_eligibility: false,
         })
         .token;
     // token B: max_investors cap 2 only
@@ -518,6 +605,7 @@ fn two_tokens_max_investors_isolated_and_shares_identity() {
             lockup: 0,
             transfer_window: false,
             max_investors: 2,
+            zk_eligibility: false,
         })
         .token;
 
@@ -563,6 +651,7 @@ fn only_token_admin_can_set_investor_cap() {
             lockup: 0,
             transfer_window: false,
             max_investors: 1,
+            zk_eligibility: false,
         })
         .token;
     env.set_auths(&[]);

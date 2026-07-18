@@ -10,16 +10,16 @@ import {
 } from '@stellar/stellar-sdk';
 import deployed from './deployed.testnet.json';
 
-const server = new rpc.Server(deployed.rpcUrl);
-const NP = deployed.networkPassphrase;
+export const server = new rpc.Server(deployed.rpcUrl);
+export const NP = deployed.networkPassphrase;
 const SOURCE = deployed.accounts.admin;
 
 type ScVal = ReturnType<typeof nativeToScVal>;
-const addr = (a: string) => nativeToScVal(a, { type: 'address' });
-const i128 = (n: number | string) => nativeToScVal(n, { type: 'i128' });
+export const addr = (a: string) => nativeToScVal(a, { type: 'address' });
+export const i128 = (n: number | string) => nativeToScVal(n, { type: 'i128' });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function buildFrom(sourceAcc: Account, contractId: string, method: string, args: ScVal[]) {
+export function buildFrom(sourceAcc: Account, contractId: string, method: string, args: ScVal[]) {
   const c = new Contract(contractId);
   return new TransactionBuilder(sourceAcc, { fee: BASE_FEE, networkPassphrase: NP })
     .addOperation(c.call(method, ...args))
@@ -92,7 +92,7 @@ export type SendResult = { ok: boolean; denied: boolean; reason: string; hash: s
  * `from` must be the connected wallet (it is both the tx source and the authorizer).
  * If a compliance module rejects, preparation fails and we report `denied`.
  */
-type SignFn = (xdr: string) => Promise<string>;
+export type SignFn = (xdr: string) => Promise<string>;
 type ExplainFn = (to: string) => Promise<string>;
 
 async function txTransfer(
@@ -186,7 +186,7 @@ export const submitZkTransfer = (from: string, to: string, amount: number, sign:
 
 // --- ZK eligibility: client-side register_self + prove_eligibility (Freighter-signed) ---
 
-const u256 = (dec: string) => nativeToScVal(BigInt(dec), { type: 'u256' });
+export const u256 = (dec: string) => nativeToScVal(BigInt(dec), { type: 'u256' });
 
 // `xdr.ScVal.scvBytes` is typed as taking a Node `Buffer`, but this is a browser build with
 // no `@types/node` (and no `Buffer` global) — the underlying js-xdr writer accepts any
@@ -195,14 +195,14 @@ const u256 = (dec: string) => nativeToScVal(BigInt(dec), { type: 'u256' });
 type ScvBytesArg = Parameters<typeof xdr.ScVal.scvBytes>[0];
 const scvBytes = (v: Uint8Array) => xdr.ScVal.scvBytes(v as unknown as ScvBytesArg);
 
-function proofScVal(a: Uint8Array, b: Uint8Array, c: Uint8Array) {
+export function proofScVal(a: Uint8Array, b: Uint8Array, c: Uint8Array) {
   const entry = (k: string, v: xdr.ScVal) =>
     new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol(k), val: v });
   // A #[contracttype] struct serializes as a symbol-keyed ScMap sorted by key (a,b,c).
   return xdr.ScVal.scvMap([entry('a', scvBytes(a)), entry('b', scvBytes(b)), entry('c', scvBytes(c))]);
 }
 
-async function signSendPoll(
+export async function signSendPoll(
   unsignedTx: import('@stellar/stellar-sdk').Transaction,
   sign: SignFn,
   step: string,
@@ -242,12 +242,15 @@ export async function submitZkEligibility(
   commitmentDec: string,
   proof: { a: Uint8Array; b: Uint8Array; c: Uint8Array },
   sign: SignFn,
+  onStep?: (phase: 'register' | 'prove') => void,
 ): Promise<{ ok: boolean; registerHash: string; proveHash: string }> {
   if (!ZK) throw new Error('ZK not deployed');
+  onStep?.('register');
   const acc1 = await server.getAccount(account);
   const registerTx = buildFrom(acc1, ZK.identityZk, 'register_self', [addr(account), u256(commitmentDec)]);
   const registerHash = await signSendPoll(registerTx, sign, 'register_self');
 
+  onStep?.('prove');
   const acc2 = await server.getAccount(account);
   const proveTx = buildFrom(acc2, ZK.identityZk, 'prove_eligibility', [
     addr(account),

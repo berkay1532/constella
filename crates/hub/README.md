@@ -85,6 +85,23 @@ Requires only `config.admin.require_auth()` — the new issuer's signature. It:
    hoisted deploy in `src/lib.rs`), then both modules are configured against that same
    `Identity(token)`. A token selecting only `max_investors` still gets its own dedicated identity
    instance, same as the country-restrict-only case.
+10. If `zk_eligibility` is `true`, country eligibility is proven **privately (ZK)** instead of in
+    cleartext. `launch` deploys a per-token **ZK identity** (`module-identity-zk`, ctor
+    `(admin, verifier)`), calls `IdentityZkAdminClient::set_policy(vk, country_restrict)` on it (the
+    platform-configured verifying key + this token's ≤2 allowed countries as the policy), stores it
+    as `Identity(token)`, and registers the shared `zk_eligibility` module on `CanCreate`/`CanTransfer`.
+    That module gates on `is_verified` — a holder proves in the browser that their hidden country is
+    in the allowed set; **the country is never written on-chain**. A ZK token's identity IS the ZK
+    identity, so the cleartext `country_restrict` and `max_investors` blocks are **skipped** (mutual
+    exclusion — the ZK identity's `country_of` is always `None`). The circuit is fixed to **2 allowed
+    countries**.
+
+### Platform config for ZK (platform-admin only)
+
+- `set_verifier(addr)` — the shared Groth16 verifier contract.
+- `set_zk_identity_wasm(hash)` — wasm hash of `module-identity-zk` (deployed per ZK token).
+- `set_zk_vk(vk)` — the shared verifying key, passed to each per-token identity's `set_policy`.
+- `is_verified(token, account) -> bool` — read passthrough to the token's ZK identity (console uses it).
 
 ## Per-token identity model
 
