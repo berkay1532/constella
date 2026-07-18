@@ -90,6 +90,10 @@ export function TokenConsole() {
     cfg.max_investors && `max-investors · ${cfg.max_investors}`,
   ].filter(Boolean) as string[];
 
+  const hasSettings = cfg.denylist || cfg.max_balance !== '0' || cfg.max_holders > 0
+    || cfg.transfer_window || cfg.max_investors > 0
+    || (!cfg.zk_eligibility && cfg.country_restrict.length > 0);
+
   return (
     <section className="block">
       <div className="sec-head">
@@ -109,6 +113,7 @@ export function TokenConsole() {
           </div>
         </div>
 
+        <h3 className="ops-section">Token operations</h3>
         <div className="ops">
           <div className="op">
             <h4>Mint</h4>
@@ -176,6 +181,20 @@ export function TokenConsole() {
             </div>
           )}
 
+          <div className="op full">
+            <h4>Read a balance</h4>
+            <p className="op-sub">Query any account's balance on this token.</p>
+            <div className="op-row">
+              <input className="inp" placeholder="account G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
+              <button className="btn sm ghost" onClick={() => read('balance', () => readTokenBalance(id, mintTo))}>Read balance</button>
+            </div>
+          </div>
+        </div>
+
+        {hasSettings && (
+          <>
+            <h3 className="ops-section">Compliance settings</h3>
+            <div className="ops">
           {!cfg.zk_eligibility && (cfg.country_restrict.length > 0 || cfg.max_investors > 0) && (
             <div className="op">
               <h4>Attest identity</h4>
@@ -244,15 +263,9 @@ export function TokenConsole() {
             </div>
           )}
 
-          <div className="op full">
-            <h4>Read a balance</h4>
-            <p className="op-sub">Query any account's balance on this token.</p>
-            <div className="op-row">
-              <input className="inp" placeholder="account G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
-              <button className="btn sm ghost" onClick={() => read('balance', () => readTokenBalance(id, mintTo))}>Read balance</button>
             </div>
-          </div>
-        </div>
+          </>
+        )}
 
         {(bal !== '' || msg || err) && (
           <div className="stat-strip">
