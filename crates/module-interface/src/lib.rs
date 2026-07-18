@@ -156,3 +156,18 @@ pub trait MaxInvestorsAdmin {
     fn cap(env: Env, token: Address) -> u32;
     fn count(env: Env, token: Address, country: u32) -> u32;
 }
+
+/// Config surface of the multi-tenant ZkEligibility module, called by the hub. Token-keyed.
+#[contractclient(name = "ZkEligibilityClient")]
+pub trait ZkEligibilityAdmin {
+    fn configure(env: Env, token: Address, identity: Address);
+    fn identity(env: Env, token: Address) -> Address;
+}
+
+/// Policy surface of the per-token ZK identity (`module-identity-zk`), called by the hub at
+/// launch to set the token's Groth16 verifying key + allowed-country set, and read eligibility.
+#[contractclient(name = "IdentityZkAdminClient")]
+pub trait IdentityZkAdmin {
+    fn set_policy(env: Env, vk: VerificationKey, allowed: Vec<u32>);
+    fn is_verified(env: Env, account: Address) -> bool;
+}
