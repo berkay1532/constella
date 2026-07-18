@@ -1,7 +1,8 @@
 #![no_std]
 //! Multi-tenant CountryRestrict module: only allows holders whose attested country
-//! (from that token's own identity provider) is in the token's allow-list. One shared
-//! instance serves every token; identity + allow-list keyed by token. Reads only the
+//! (from that token's own identity provider) is in the token's allow-list. A mint checks the
+//! recipient; a transfer checks BOTH parties (sender and recipient must be in the allow-list).
+//! One shared instance serves every token; identity + allow-list keyed by token. Reads only the
 //! identity boundary (no balance mirror), so post-events are no-ops.
 
 use constella_module_interface::IdentityClient;
@@ -45,8 +46,9 @@ impl CountryRestrictHubModule {
         env.storage().persistent().get(&DataKey::Allowed(token)).unwrap()
     }
 
-    pub fn can_transfer(env: Env, _from: Address, to: Address, _amount: i128, token: Address) -> bool {
-        Self::eligible(&env, &token, &to)
+    pub fn can_transfer(env: Env, from: Address, to: Address, _amount: i128, token: Address) -> bool {
+        // Both parties' countries must be in the allow-list: the sender and the recipient.
+        Self::eligible(&env, &token, &from) && Self::eligible(&env, &token, &to)
     }
 
     pub fn can_create(env: Env, to: Address, _amount: i128, token: Address) -> bool {

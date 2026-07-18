@@ -91,7 +91,9 @@ Requires only `config.admin.require_auth()` — the new issuer's signature. It:
     platform-configured verifying key + this token's ≤2 allowed countries as the policy), stores it
     as `Identity(token)`, and registers the shared `zk_eligibility` module on `CanCreate`/`CanTransfer`.
     That module gates on `is_verified` — a holder proves in the browser that their hidden country is
-    in the allowed set; **the country is never written on-chain**. A ZK token's identity IS the ZK
+    in the allowed set; **the country is never written on-chain**. A mint checks the recipient; a
+    **transfer checks both parties** (sender and recipient must be eligible). The cleartext
+    `country_restrict` module gates identically (allow-list membership on both parties for a transfer). A ZK token's identity IS the ZK
     identity, so the cleartext `country_restrict` and `max_investors` blocks are **skipped** (mutual
     exclusion — the ZK identity's `country_of` is always `None`). The circuit is fixed to **2 allowed
     countries**.
