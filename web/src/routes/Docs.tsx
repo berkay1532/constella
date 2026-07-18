@@ -22,6 +22,7 @@ export function Docs() {
       <div className="docs">
         <nav className="docs-nav">
           <a href="#overview">Overview</a>
+          <a href="#standards">Standards &amp; SEP-57</a>
           <a href="#launch">Launching</a>
           <a href="#modules">Modules</a>
           <a href="#identity">Identity</a>
@@ -41,6 +42,32 @@ export function Docs() {
             Every token is served by one shared multi-tenant <em>hub</em>. Launching does not deploy a
             new stack per issuer — it registers your token against the shared modules and configures
             them for you, which is why a full compliant token launches in a single signature.
+          </p>
+
+          <h3 id="standards">Standards &amp; SEP-57</h3>
+          <p>
+            Every regulated tokenized asset has to answer two questions on <em>every</em> transfer:
+            <strong> who is allowed to hold it</strong> (identity — jurisdiction, KYC, accreditation) and
+            <strong> which rules apply</strong> (compliance — holder caps, lock-ups, concentration limits). On
+            Ethereum this two-layer model is standardized as{' '}
+            <a href="https://www.erc3643.org/" target="_blank" rel="noreferrer">ERC-3643 (T-REX)</a>, the standard
+            behind most permissioned real-world-asset tokens.
+          </p>
+          <p>
+            Stellar is standardizing the same model as{' '}
+            <a href="https://github.com/orgs/stellar/discussions/1814" target="_blank" rel="noreferrer">SEP-57</a> —
+            “T-REX for Stellar,” a draft led by OpenZeppelin. It describes a hook-based compliance engine (modules
+            run <code>created</code> / <code>transferred</code> / <code>destroyed</code> hooks inside the transfer),
+            an abstract identity interface that can be claim-based, Merkle-tree, or <strong>zero-knowledge</strong>,
+            and a SEP-41 token extended with regulatory controls.
+          </p>
+          <p>
+            Constella follows this architecture directly: a hook-based modular compliance dispatcher, a per-token
+            identity provider, an optional zero-knowledge identity that proves eligibility without revealing the
+            underlying attribute, and shared multi-tenant infrastructure so many tokens reuse one audited stack. In
+            other words, Constella is a working implementation of the identity-and-compliance model SEP-57
+            describes — what you launch here maps onto the standard the Stellar ecosystem is converging on. SEP-57
+            is an evolving draft, and we track it as its interfaces firm up.
           </p>
 
           <h3 id="launch">Launching a token</h3>
