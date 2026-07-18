@@ -49,6 +49,7 @@ export function TokenConsole() {
   const [zkCountry, setZkCountry] = useState('840');
   const [zkStep, setZkStep] = useState(-1);
   const [verified, setVerified] = useState(false);
+  const [tab, setTab] = useState<'ops' | 'settings'>('ops');
 
   const cfg = rec?.config;
   useEffect(() => {
@@ -78,6 +79,17 @@ export function TokenConsole() {
   const read = async (label: string, fn: () => Promise<string>) => {
     setErr('');
     try { setBalLabel(label); setBal(await fn()); } catch (e) { setErr(`${label} failed: ${humanize(String((e as Error).message || e))}`); }
+  };
+  const proveNow = async () => {
+    setErr(''); setMsg(''); setZkStep(0);
+    try {
+      await proveEligibility(id, address, Number(zkCountry), sign, (p) => setZkStep(p === 'register' ? 2 : 3));
+      setZkStep(4); setVerified(true); setMsg('Proven eligible — your country stayed private.');
+    } catch (e) {
+      setZkStep(-1);
+      const detail = String((e as Error).message || e);
+      setErr(detail.includes('not in the allowed') ? 'Not eligible — and the app never learned your country.' : `Prove rejected: ${detail}`);
+    }
   };
 
   const chips = [
@@ -113,88 +125,84 @@ export function TokenConsole() {
           </div>
         </div>
 
-        <h3 className="ops-section">Token operations</h3>
-        <div className="ops">
-          <div className="op">
-            <h4>Mint</h4>
-            <p className="op-sub">
-              {cfg.zk_eligibility
-                ? (verified
-                    ? 'You are eligible — mint to yourself (pre-filled below), or to another proven holder.'
-                    : 'This token requires ZK eligibility. Prove yours first (panel below), then mint.')
-                : 'Seed a holder. The recipient defaults to your wallet; compliance is checked on-chain before the mint settles.'}
-            </p>
-            <div className="op-row">
-              <input className="inp" placeholder="recipient G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
-              <input className="inp narrow" type="number" value={mintAmt} onChange={(e) => setMintAmt(e.target.value)} />
-              <button className="btn sm" disabled={cfg.zk_eligibility && !verified}
-                onClick={() => run('Mint', () => mint(address, id, mintTo, mintAmt, sign))}>
-                {cfg.zk_eligibility && !verified ? 'Prove first ↓' : 'Mint'}
-              </button>
-            </div>
-          </div>
-
-          <div className="op">
-            <h4>Transfer</h4>
-            <p className="op-sub">Send from your wallet to another holder. <code>can_transfer</code> checks the recipient's eligibility on-chain first — an un-attested / un-proven recipient is rejected.</p>
-            <div className="op-row">
-              <input className="inp" placeholder="recipient G…" value={xferTo} onChange={(e) => setXferTo(e.target.value)} />
-              <input className="inp narrow" type="number" value={xferAmt} onChange={(e) => setXferAmt(e.target.value)} />
-              <button className="btn sm" onClick={() => run('Transfer', () => transfer(address, id, xferTo, xferAmt, sign))}>Transfer</button>
-            </div>
-          </div>
-
-          {cfg.zk_eligibility && (
-            <div className="op full">
-              <h4>Prove eligibility (zero-knowledge)</h4>
-              <p className="op-sub">
-                Prove your country is allowed <strong>without revealing which country</strong> — a Groth16 proof
-                generated in your browser. Status: {verified ? <span style={{ color: 'var(--good)' }}>✓ eligible (country private)</span> : <span style={{ color: 'var(--faint)' }}>not proven yet</span>}
-              </p>
-              <div className="op-row">
-                <select className="inp narrow" value={zkCountry} onChange={(e) => setZkCountry(e.target.value)}>
-                  <option value="840">🇺🇸 US (840)</option>
-                  <option value="276">🇩🇪 DE (276)</option>
-                  <option value="792">🇹🇷 TR (792)</option>
-                  <option value="250">🇫🇷 FR (250)</option>
-                </select>
-                <button className="btn sm cyan" disabled={zkStep >= 0 && zkStep < 4} onClick={async () => {
-                  setErr(''); setMsg(''); setZkStep(0);
-                  try {
-                    await proveEligibility(id, address, Number(zkCountry), sign, (p) => setZkStep(p === 'register' ? 2 : 3));
-                    setZkStep(4); setVerified(true); setMsg('Proven eligible — your country stayed private.');
-                  } catch (e) {
-                    setZkStep(-1);
-                    setErr(String((e as Error).message || e).includes('not in the allowed') ? 'Not eligible — and the app never learned your country.' : `Prove rejected: ${String((e as Error).message || e)}`);
-                  }
-                }}>{zkStep >= 0 && zkStep < 4 ? 'Proving…' : 'Prove my eligibility'}</button>
-              </div>
-              {zkStep >= 0 && (
-                <ul className="zk-pipe">
-                  {ZK_PROVE_STEPS.map((s, i) => (
-                    <li key={i} className={i < zkStep ? 'done' : i === zkStep ? 'active' : ''}>
-                      <span className="zs">{i < zkStep ? '✓' : i === zkStep ? '' : i + 1}</span><span>{s}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+        <div className="console-tabs">
+          <button className={`ctab ${tab === 'ops' ? 'on' : ''}`} onClick={() => setTab('ops')}>Token operations</button>
+          {hasSettings && (
+            <button className={`ctab ${tab === 'settings' ? 'on' : ''}`} onClick={() => setTab('settings')}>Compliance settings</button>
           )}
-
-          <div className="op full">
-            <h4>Read a balance</h4>
-            <p className="op-sub">Query any account's balance on this token.</p>
-            <div className="op-row">
-              <input className="inp" placeholder="account G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
-              <button className="btn sm ghost" onClick={() => read('balance', () => readTokenBalance(id, mintTo))}>Read balance</button>
-            </div>
-          </div>
         </div>
 
-        {hasSettings && (
+        {tab === 'ops' && (cfg.zk_eligibility && !verified ? (
+          <div className="gate">
+            <span className="gate-badge">◆ Step 1 · Prove eligibility</span>
+            <h4>This token is ZK-gated — prove your eligibility to unlock minting &amp; transfers.</h4>
+            <p>
+              Prove your country is in the allowed set <strong>without revealing which country it is</strong> —
+              a Groth16 proof generated entirely in your browser. Your country never leaves your device and is
+              never written on-chain; only the proof of eligibility is.
+            </p>
+            <div className="op-row">
+              <select className="inp narrow" value={zkCountry} onChange={(e) => setZkCountry(e.target.value)}>
+                <option value="840">🇺🇸 US (840)</option>
+                <option value="276">🇩🇪 DE (276)</option>
+                <option value="792">🇹🇷 TR (792)</option>
+                <option value="250">🇫🇷 FR (250)</option>
+              </select>
+              <button className="btn cyan" disabled={zkStep >= 0 && zkStep < 4} onClick={proveNow}>
+                {zkStep >= 0 && zkStep < 4 ? 'Proving…' : 'Prove my eligibility'}
+              </button>
+            </div>
+            {zkStep >= 0 && (
+              <ul className="zk-pipe">
+                {ZK_PROVE_STEPS.map((s, i) => (
+                  <li key={i} className={i < zkStep ? 'done' : i === zkStep ? 'active' : ''}>
+                    <span className="zs">{i < zkStep ? '✓' : i === zkStep ? '' : i + 1}</span><span>{s}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="gate-locked">🔒 Mint, Transfer &amp; Read balance unlock the moment you're eligible.</div>
+          </div>
+        ) : (
           <>
-            <h3 className="ops-section">Compliance settings</h3>
+            {cfg.zk_eligibility && verified && (
+              <div className="gate-done">✓ Eligibility proven — your country stayed private. Minting &amp; transfers are unlocked.</div>
+            )}
             <div className="ops">
+              <div className="op">
+                <h4>Mint</h4>
+                <p className="op-sub">Seed a holder. The recipient defaults to your wallet; compliance is checked on-chain before the mint settles.</p>
+                <div className="op-row">
+                  <input className="inp" placeholder="recipient G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
+                  <input className="inp narrow" type="number" value={mintAmt} onChange={(e) => setMintAmt(e.target.value)} />
+                  <button className="btn sm" onClick={() => run('Mint', () => mint(address, id, mintTo, mintAmt, sign))}>Mint</button>
+                </div>
+              </div>
+
+              <div className="op">
+                <h4>Transfer</h4>
+                <p className="op-sub">Send from your wallet to another holder. <code>can_transfer</code> checks the recipient's eligibility on-chain first — an un-attested / un-proven recipient is rejected.</p>
+                <div className="op-row">
+                  <input className="inp" placeholder="recipient G…" value={xferTo} onChange={(e) => setXferTo(e.target.value)} />
+                  <input className="inp narrow" type="number" value={xferAmt} onChange={(e) => setXferAmt(e.target.value)} />
+                  <button className="btn sm" onClick={() => run('Transfer', () => transfer(address, id, xferTo, xferAmt, sign))}>Transfer</button>
+                </div>
+              </div>
+
+              <div className="op full">
+                <h4>Read a balance</h4>
+                <p className="op-sub">Query any account's balance on this token.</p>
+                <div className="op-row">
+                  <input className="inp" placeholder="account G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
+                  <button className="btn sm ghost" onClick={() => read('balance', () => readTokenBalance(id, mintTo))}>Read balance</button>
+                </div>
+              </div>
+            </div>
+          </>
+        ))}
+
+        {tab === 'settings' && hasSettings && (
+          <div className="ops">
           {!cfg.zk_eligibility && (cfg.country_restrict.length > 0 || cfg.max_investors > 0) && (
             <div className="op">
               <h4>Attest identity</h4>
@@ -262,9 +270,7 @@ export function TokenConsole() {
               </div>
             </div>
           )}
-
-            </div>
-          </>
+          </div>
         )}
 
         {(bal !== '' || msg || err) && (

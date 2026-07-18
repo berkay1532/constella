@@ -153,8 +153,24 @@ h1,h2,h3,h4 { text-wrap:balance; }
 .tok-id .label { font-family:var(--mono); font-size:.66rem; letter-spacing:.16em; text-transform:uppercase; color:var(--faint); }
 .tok-id .addr { font-family:var(--mono); font-size:.96rem; color:var(--text); }
 .tok-chips { display:flex; gap:7px; flex-wrap:wrap; margin-left:auto; }
-.ops-section { font-family:var(--mono); font-size:.68rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted);
-  margin:0; padding:15px 24px 11px; border-top:1px solid var(--line); background:var(--void-2); }
+/* console tabs — one section visible at a time */
+.console-tabs { display:flex; gap:4px; padding:0 16px; border-top:1px solid var(--line); background:var(--void-2); }
+.ctab { font-family:var(--mono); font-size:.68rem; letter-spacing:.14em; text-transform:uppercase; color:var(--faint);
+  background:transparent; border:none; border-bottom:2px solid transparent; padding:14px 12px; cursor:pointer; transition:color .18s, border-color .18s; }
+.ctab:hover { color:var(--muted); }
+.ctab.on { color:var(--iris-bright); border-bottom-color:var(--iris); }
+
+/* ZK eligibility gate — must be cleared before minting/transferring */
+.gate { padding:30px 28px; border-top:1px solid var(--line);
+  background:radial-gradient(ellipse at 10% 0%, rgba(79,224,212,.09), transparent 58%), var(--panel); }
+.gate-badge { display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:.66rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--cyan); padding:5px 12px; border-radius:999px; border:1px solid var(--cyan-dim); background:rgba(79,224,212,.08); }
+.gate h4 { margin:16px 0 6px; font-size:1.12rem; font-weight:600; letter-spacing:-.01em; max-width:52ch; }
+.gate > p { color:var(--muted); font-size:.9rem; margin:0 0 18px; max-width:60ch; line-height:1.55; }
+.gate-locked { margin-top:22px; display:flex; align-items:center; gap:9px; padding:13px 16px; border-radius:11px;
+  border:1px dashed var(--line); color:var(--faint); font-size:.82rem; background:var(--void-2); }
+.gate-done { display:flex; align-items:center; gap:9px; padding:14px 24px; font-size:.86rem; color:var(--good);
+  border-top:1px solid var(--line); background:rgba(69,214,138,.07); }
 .ops { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line); }
 .op { background:var(--panel); padding:22px 24px; }
 .op.full { grid-column:1 / -1; }
