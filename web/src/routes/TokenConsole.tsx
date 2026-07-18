@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useWallet } from '../wallet';
 import { getToken } from '../tokenStore';
 import {
-  mint, attestCountry, readIdentity, readInvestorCount, readTokenBalance, readIsDenied,
+  mint, transfer, attestCountry, readIdentity, readInvestorCount, readTokenBalance, readIsDenied,
   setInvestorCap, setMaxBalance, setMaxHolders, pauseToken, unpauseToken, addToDenylist,
   proveEligibility, readIsVerified,
 } from '../hub';
@@ -16,6 +16,18 @@ const ZK_PROVE_STEPS = [
   'Registering your private commitment',
   'Verifying the proof on-chain',
 ];
+
+// Turn a raw Soroban HostError (with its verbose diagnostic-event log) into a plain reason.
+// The diagnostic events name the module hook that returned false, so we key off those.
+function humanize(msg: string): string {
+  if (/is_verified/.test(msg)) return "recipient hasn't proven ZK eligibility yet — they must prove in the console before they can receive.";
+  if (/country_of/.test(msg)) return "recipient's country isn't attested, or isn't in the allowed list.";
+  if (/is_denied|Denied|denylist/i.test(msg)) return 'recipient is on the denylist.';
+  if (/is_paused|paused|window/i.test(msg)) return 'transfers are currently frozen (transfer window).';
+  if (/Error\(Contract, #6\)|can_transfer|can_create/.test(msg)) return "rejected by a compliance rule — the recipient isn't eligible (not attested / not proven).";
+  const m = msg.match(/Error\([^)]+\)/);
+  return m ? `on-chain error ${m[0]}` : msg.slice(0, 160);
+}
 
 export function TokenConsole() {
   const { id = '' } = useParams();
@@ -32,6 +44,8 @@ export function TokenConsole() {
   const [balLabel, setBalLabel] = useState('');
   const [mbCap, setMbCap] = useState('0');
   const [mhCap, setMhCap] = useState(0);
+  const [xferTo, setXferTo] = useState('');
+  const [xferAmt, setXferAmt] = useState('10');
   const [zkCountry, setZkCountry] = useState('840');
   const [zkStep, setZkStep] = useState(-1);
   const [verified, setVerified] = useState(false);
@@ -58,11 +72,11 @@ export function TokenConsole() {
   const run = async (label: string, fn: () => Promise<string | void>) => {
     setMsg(`${label}…`); setErr('');
     try { const h = await fn(); setMsg(`${label} succeeded${typeof h === 'string' ? ` · ${h.slice(0, 10)}…` : ''}`); }
-    catch (e) { setErr(`${label} rejected: ${String((e as Error).message || e)}`); setMsg(''); }
+    catch (e) { setErr(`${label} rejected: ${humanize(String((e as Error).message || e))}`); setMsg(''); }
   };
   const read = async (label: string, fn: () => Promise<string>) => {
     setErr('');
-    try { setBalLabel(label); setBal(await fn()); } catch (e) { setErr(`${label} failed: ${String((e as Error).message || e)}`); }
+    try { setBalLabel(label); setBal(await fn()); } catch (e) { setErr(`${label} failed: ${humanize(String((e as Error).message || e))}`); }
   };
 
   const chips = [
@@ -102,6 +116,16 @@ export function TokenConsole() {
               <input className="inp" placeholder="recipient G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
               <input className="inp narrow" type="number" value={mintAmt} onChange={(e) => setMintAmt(e.target.value)} />
               <button className="btn sm" onClick={() => run('Mint', () => mint(address, id, mintTo, mintAmt, sign))}>Mint</button>
+            </div>
+          </div>
+
+          <div className="op">
+            <h4>Transfer</h4>
+            <p className="op-sub">Send from your wallet to another holder. <code>can_transfer</code> checks the recipient's eligibility on-chain first — an un-attested / un-proven recipient is rejected.</p>
+            <div className="op-row">
+              <input className="inp" placeholder="recipient G…" value={xferTo} onChange={(e) => setXferTo(e.target.value)} />
+              <input className="inp narrow" type="number" value={xferAmt} onChange={(e) => setXferAmt(e.target.value)} />
+              <button className="btn sm" onClick={() => run('Transfer', () => transfer(address, id, xferTo, xferAmt, sign))}>Transfer</button>
             </div>
           </div>
 

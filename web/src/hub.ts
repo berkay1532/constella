@@ -94,6 +94,10 @@ async function invoke(from: string, contractId: string, method: string, args: xd
 export const mint = (from: string, token: string, to: string, amount: string, sign: SignFn) =>
   invoke(from, token, 'mint', [scAddr(to), i128(amount) as unknown as xdr.ScVal], sign, 'mint');
 
+/** Transfer from the connected wallet to `to`. `can_transfer` gates the recipient on-chain. */
+export const transfer = (from: string, token: string, to: string, amount: string, sign: SignFn) =>
+  invoke(from, token, 'transfer', [scAddr(from), scAddr(to), i128(amount) as unknown as xdr.ScVal], sign, 'transfer');
+
 export async function readIdentity(token: string): Promise<string> {
   const s = await sim(HUB, 'identity', [scAddr(token)]);
   if (rpc.Api.isSimulationError(s)) throw new Error('no identity for this token');
