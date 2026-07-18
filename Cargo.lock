@@ -496,6 +496,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "constella-hub-module-zk-eligibility"
+version = "0.1.0"
+dependencies = [
+ "constella-identity-mock",
+ "constella-module-interface",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "constella-identity-mock"
 version = "0.1.0"
 dependencies = [
@@ -526,6 +535,7 @@ dependencies = [
  "ark-ec 0.4.2",
  "ark-ff 0.4.2",
  "ark-serialize 0.4.2",
+ "constella-module-interface",
  "constella-zk-verifier",
  "serde_json",
  "soroban-sdk",
@@ -594,6 +604,7 @@ dependencies = [
  "ark-ec 0.4.2",
  "ark-ff 0.4.2",
  "ark-serialize 0.4.2",
+ "constella-module-interface",
  "serde_json",
  "soroban-sdk",
 ]
