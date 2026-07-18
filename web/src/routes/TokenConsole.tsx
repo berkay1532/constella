@@ -20,8 +20,8 @@ const ZK_PROVE_STEPS = [
 // Turn a raw Soroban HostError (with its verbose diagnostic-event log) into a plain reason.
 // The diagnostic events name the module hook that returned false, so we key off those.
 function humanize(msg: string): string {
-  if (/is_verified/.test(msg)) return "a party isn't ZK-eligible — for a transfer BOTH sender and recipient must have proven eligibility in the console.";
-  if (/country_of/.test(msg)) return "a party's country isn't attested or isn't in the allowed list — a transfer requires BOTH sender and recipient.";
+  if (/is_verified/.test(msg)) return "a party isn't ZK-eligible yet — prove eligibility in the console first (a mint checks the recipient; a transfer checks both the sender and the recipient).";
+  if (/country_of/.test(msg)) return "a party's country isn't attested or isn't in the allowed list (a mint checks the recipient; a transfer checks both sender and recipient).";
   if (/is_denied|Denied|denylist/i.test(msg)) return 'recipient is on the denylist.';
   if (/is_paused|paused|window/i.test(msg)) return 'transfers are currently frozen (transfer window).';
   if (/Error\(Contract, #6\)|can_transfer|can_create/.test(msg)) return "rejected by a compliance rule — the recipient isn't eligible (not attested / not proven).";
@@ -54,7 +54,8 @@ export function TokenConsole() {
   useEffect(() => {
     if (cfg && (cfg.country_restrict.length || cfg.max_investors)) readIdentity(id).then(setIdentity).catch(() => {});
     if (cfg && cfg.zk_eligibility && address) readIsVerified(id, address).then(setVerified).catch(() => {});
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (address) setMintTo((cur) => cur || address); // default: mint to yourself
+  }, [id, address]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!address) {
     return <div className="panel state"><h2>Token console</h2><p>Connect your wallet to operate a token you launched.</p></div>;
@@ -82,7 +83,7 @@ export function TokenConsole() {
   const chips = [
     cfg.denylist && 'denylist',
     cfg.max_balance !== '0' && 'max-balance',
-    cfg.country_restrict.length && 'country',
+    cfg.country_restrict.length && (cfg.zk_eligibility ? 'country · ZK private' : 'country'),
     cfg.max_holders && `max-holders · ${cfg.max_holders}`,
     cfg.lockup && `lockup · ${cfg.lockup}s`,
     cfg.transfer_window && 'transfer-window',
@@ -111,11 +112,20 @@ export function TokenConsole() {
         <div className="ops">
           <div className="op">
             <h4>Mint</h4>
-            <p className="op-sub">Seed a holder. Compliance is checked on-chain before the mint settles.</p>
+            <p className="op-sub">
+              {cfg.zk_eligibility
+                ? (verified
+                    ? 'You are eligible — mint to yourself (pre-filled below), or to another proven holder.'
+                    : 'This token requires ZK eligibility. Prove yours first (panel below), then mint.')
+                : 'Seed a holder. The recipient defaults to your wallet; compliance is checked on-chain before the mint settles.'}
+            </p>
             <div className="op-row">
               <input className="inp" placeholder="recipient G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
               <input className="inp narrow" type="number" value={mintAmt} onChange={(e) => setMintAmt(e.target.value)} />
-              <button className="btn sm" onClick={() => run('Mint', () => mint(address, id, mintTo, mintAmt, sign))}>Mint</button>
+              <button className="btn sm" disabled={cfg.zk_eligibility && !verified}
+                onClick={() => run('Mint', () => mint(address, id, mintTo, mintAmt, sign))}>
+                {cfg.zk_eligibility && !verified ? 'Prove first ↓' : 'Mint'}
+              </button>
             </div>
           </div>
 
