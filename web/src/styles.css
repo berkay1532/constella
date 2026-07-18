@@ -128,6 +128,7 @@ h1,h2,h3,h4 { text-wrap:balance; }
   padding:6px 8px; font-family:var(--mono); font-size:.82rem; text-align:right; }
 .countries { display:flex; gap:14px; flex-wrap:wrap; margin-top:6px; }
 .countries label { display:flex; gap:6px; align-items:center; font-size:.85rem; color:var(--muted); cursor:pointer; }
+.zk-toggle { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:.82rem; color:var(--cyan); cursor:pointer; }
 .wiz-hint { margin-top:14px; font-size:.8rem; color:var(--cyan); display:flex; align-items:center; gap:8px; }
 .wiz-foot { margin-top:20px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
 .wiz-foot .summary { font-family:var(--mono); font-size:.76rem; color:var(--muted); }

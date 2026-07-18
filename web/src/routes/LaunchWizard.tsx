@@ -29,18 +29,19 @@ const COUNTRIES = [
 
 const STAR_LABELS: Record<string, string> = {
   denylist: 'Denylist', country: 'Country', maxbal: 'Max bal',
-  holders: 'Holders', lockup: 'Lockup', window: 'Window', investors: 'Investors',
+  holders: 'Holders', lockup: 'Lockup', window: 'Window', investors: 'Investors', zk: 'ZK private',
 };
 
 function activeMods(cfg: LaunchConfig): string[] {
   const a: string[] = [];
   if (cfg.denylist) a.push('denylist');
-  if (cfg.country_restrict.length) a.push('country');
+  if (cfg.zk_eligibility) a.push('zk');
+  else if (cfg.country_restrict.length) a.push('country');
   if (cfg.max_balance !== '0' && cfg.max_balance !== '') a.push('maxbal');
   if (cfg.max_holders > 0) a.push('holders');
   if (cfg.lockup > 0) a.push('lockup');
   if (cfg.transfer_window) a.push('window');
-  if (cfg.max_investors > 0) a.push('investors');
+  if (!cfg.zk_eligibility && cfg.max_investors > 0) a.push('investors');
   return a;
 }
 
@@ -66,15 +67,25 @@ export function LaunchWizard() {
   }
 
   const active = activeMods(cfg);
-  const toggleCountry = (code: number) => set('country_restrict',
-    cfg.country_restrict.includes(code) ? cfg.country_restrict.filter((c) => c !== code) : [...cfg.country_restrict, code]);
+  const toggleCountry = (code: number) => {
+    const has = cfg.country_restrict.includes(code);
+    if (has) set('country_restrict', cfg.country_restrict.filter((c) => c !== code));
+    else if (!cfg.zk_eligibility || cfg.country_restrict.length < 2) set('country_restrict', [...cfg.country_restrict, code]);
+  };
 
   const onLaunch = async () => {
     setError(''); setStatus('Preparing transaction…');
+    // The ZK circuit is fixed to exactly 2 allowed countries; pad a single choice to two.
+    let launchCfg = cfg;
+    if (cfg.zk_eligibility) {
+      if (cfg.country_restrict.length === 0) { setError('Pick 1 or 2 allowed countries for private eligibility.'); setStatus(''); return; }
+      const allowed = cfg.country_restrict.length === 1 ? [cfg.country_restrict[0], cfg.country_restrict[0]] : cfg.country_restrict.slice(0, 2);
+      launchCfg = { ...cfg, country_restrict: allowed };
+    }
     try {
       setStatus('Awaiting your signature…');
-      const { token, hash } = await launchToken(cfg, sign);
-      saveToken({ id: token, admin: address, config: cfg, hash, createdAt: Date.now() });
+      const { token, hash } = await launchToken(launchCfg, sign);
+      saveToken({ id: token, admin: address, config: launchCfg, hash, createdAt: Date.now() });
       setStatus('');
       setResult({ token, hash });
     } catch (e) { setError(String((e as Error).message || e)); setStatus(''); }
@@ -151,11 +162,11 @@ export function LaunchWizard() {
                 <div className="m-ctl"><div className="sw" /></div>
               </div>
 
-              <div className={`mod ${cfg.country_restrict.length ? 'on' : ''}`}>
+              <div className={`mod ${cfg.country_restrict.length || cfg.zk_eligibility ? 'on' : ''}`}>
                 <div className="star">🌍</div>
                 <div style={{ flex: 1 }}>
-                  <div className="m-name">Country restrict</div>
-                  <div className="m-desc">Allow only chosen jurisdictions</div>
+                  <div className="m-name">Country eligibility</div>
+                  <div className="m-desc">Allow only chosen jurisdictions{cfg.zk_eligibility ? ' · proven privately, up to 2' : ''}</div>
                   <div className="countries">
                     {COUNTRIES.map((c) => (
                       <label key={c.code}>
@@ -164,6 +175,17 @@ export function LaunchWizard() {
                       </label>
                     ))}
                   </div>
+                  <label className="zk-toggle">
+                    <input type="checkbox" checked={cfg.zk_eligibility} onChange={(e) => {
+                      const on = e.target.checked;
+                      set('zk_eligibility', on);
+                      if (on) {
+                        set('max_investors', 0);
+                        if (cfg.country_restrict.length > 2) set('country_restrict', cfg.country_restrict.slice(0, 2));
+                      }
+                    }} />
+                    🛡️ Private (prove with ZK — the country is never revealed on-chain)
+                  </label>
                 </div>
               </div>
 
@@ -196,14 +218,16 @@ export function LaunchWizard() {
                 <div className="m-ctl"><div className="sw" /></div>
               </div>
 
-              <div className={`mod ${cfg.max_investors > 0 ? 'on' : ''}`}>
+              <div className={`mod ${!cfg.zk_eligibility && cfg.max_investors > 0 ? 'on' : ''}`} style={cfg.zk_eligibility ? { opacity: 0.5 } : undefined}>
                 <div className="star">🪐</div>
-                <div><div className="m-name">Max investors / country</div><div className="m-desc">Cap distinct holders per jurisdiction (0 = off)</div></div>
-                <div className="m-ctl"><input className="num" type="number" min={0} value={cfg.max_investors}
+                <div><div className="m-name">Max investors / country</div><div className="m-desc">{cfg.zk_eligibility ? 'Unavailable with private (ZK) eligibility' : 'Cap distinct holders per jurisdiction (0 = off)'}</div></div>
+                <div className="m-ctl"><input className="num" type="number" min={0} disabled={cfg.zk_eligibility} value={cfg.max_investors}
                   onChange={(e) => set('max_investors', Number(e.target.value))} /></div>
               </div>
 
-              {cfg.country_restrict.length > 0 && cfg.max_investors > 0 && (
+              {cfg.zk_eligibility ? (
+                <div className="wiz-hint">🛡️ Holders will prove eligibility in the browser — their country never touches the chain.</div>
+              ) : cfg.country_restrict.length > 0 && cfg.max_investors > 0 && (
                 <div className="wiz-hint">✦ Country restrict and max-investors will share one identity for this token.</div>
               )}
 
@@ -231,7 +255,7 @@ export function LaunchWizard() {
               <li><span className="k">Admin</span><span className="v">{short}</span></li>
               <li><span className="k">Denylist</span><span className={`v ${cfg.denylist ? 'on' : 'off'}`}>{cfg.denylist ? 'on' : 'off'}</span></li>
               <li><span className="k">Max balance</span><span className={`v ${cfg.max_balance !== '0' ? 'on' : 'off'}`}>{cfg.max_balance === '0' ? 'off' : cfg.max_balance}</span></li>
-              <li><span className="k">Country allow-list</span><span className={`v ${cfg.country_restrict.length ? 'on' : 'off'}`}>{cfg.country_restrict.length ? cfg.country_restrict.join(', ') : 'off'}</span></li>
+              <li><span className="k">Country eligibility</span><span className={`v ${cfg.country_restrict.length ? 'on' : 'off'}`}>{cfg.country_restrict.length ? `${cfg.country_restrict.join(', ')}${cfg.zk_eligibility ? ' · private (ZK)' : ' · cleartext'}` : 'off'}</span></li>
               <li><span className="k">Max holders</span><span className={`v ${cfg.max_holders ? 'on' : 'off'}`}>{cfg.max_holders || 'off'}</span></li>
               <li><span className="k">Lockup</span><span className={`v ${cfg.lockup ? 'on' : 'off'}`}>{cfg.lockup ? `${cfg.lockup}s` : 'off'}</span></li>
               <li><span className="k">Transfer window</span><span className={`v ${cfg.transfer_window ? 'on' : 'off'}`}>{cfg.transfer_window ? 'on' : 'off'}</span></li>

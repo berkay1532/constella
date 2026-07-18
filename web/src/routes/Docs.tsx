@@ -81,14 +81,18 @@ export function Docs() {
 
           <h3 id="privacy">Zero-knowledge eligibility</h3>
           <p>
-            Constella also supports privacy-preserving eligibility: a holder can prove their country is
-            allowed <em>without revealing which country it is</em>, using a Groth16 proof generated
-            entirely in their browser. The country value never leaves the device and is never written
-            on-chain — only the proof of eligibility is.
+            Country eligibility can be enforced <em>privately</em>. At launch, turn on
+            <strong> “Private (prove with ZK)”</strong> under Country eligibility: the hub deploys a
+            per-token ZK identity for your token, and holders prove — in the token console — that their
+            country is in the allowed set <em>without revealing which country it is</em>, using a Groth16
+            proof generated entirely in the browser. The country value never leaves the device and is
+            never written on-chain; only the proof of eligibility is. A mint or transfer to a holder who
+            has not proven eligibility is rejected on-chain, just like every other rule.
           </p>
           <p>
-            This is an early capability rather than a launch-wizard toggle today. You can try the
-            interactive demo: <Link to="/zk">open the ZK eligibility demo →</Link>
+            The circuit is fixed to two allowed countries, and private eligibility replaces cleartext
+            country attestation for that token (it can’t be combined with the per-country investor cap,
+            which needs to read a country).
           </p>
 
           <h3 id="network">Network</h3>

@@ -1,5 +1,7 @@
 import { xdr, nativeToScVal, scValToNative, TransactionBuilder, rpc, Account } from '@stellar/stellar-sdk';
-import { server, NP, buildFrom, addr, i128, signSendPoll, deployed, type SignFn } from './stellar';
+import { server, NP, buildFrom, addr, i128, signSendPoll, u256, proofScVal, deployed, type SignFn } from './stellar';
+import { generateProof } from './zk/prove';
+import { encodeProof } from './zk/encode';
 import hub from './hub.testnet.json';
 
 export { hub };
@@ -8,16 +10,17 @@ export type LaunchConfig = {
   admin: string;
   denylist: boolean;
   max_balance: string; // i128 as decimal string; '0' = off
-  country_restrict: number[]; // ISO numeric codes; [] = off
+  country_restrict: number[]; // ISO numeric codes; [] = off; for ZK tokens this is the allowed set (exactly 2)
   max_holders: number; // 0 = off
   lockup: number; // seconds; 0 = off
   transfer_window: boolean;
   max_investors: number; // per-country cap; 0 = off
+  zk_eligibility: boolean; // true = country eligibility proven privately (ZK), not cleartext
 };
 
 export const blankConfig = (admin: string): LaunchConfig => ({
   admin, denylist: false, max_balance: '0', country_restrict: [],
-  max_holders: 0, lockup: 0, transfer_window: false, max_investors: 0,
+  max_holders: 0, lockup: 0, transfer_window: false, max_investors: 0, zk_eligibility: false,
 });
 
 const u32 = (n: number) => nativeToScVal(n, { type: 'u32' });
@@ -36,6 +39,7 @@ export function launchConfigScVal(cfg: LaunchConfig): xdr.ScVal {
     e('max_holders', u32(cfg.max_holders)),
     e('max_investors', u32(cfg.max_investors)),
     e('transfer_window', xdr.ScVal.scvBool(cfg.transfer_window)),
+    e('zk_eligibility', xdr.ScVal.scvBool(cfg.zk_eligibility)),
   ]);
 }
 
@@ -124,4 +128,49 @@ export async function readIsDenied(token: string, account: string): Promise<bool
 export async function readTokenBalance(token: string, account: string): Promise<string> {
   const s = await sim(token, 'balance', [scAddr(account)]);
   return rpc.Api.isSimulationError(s) ? '0' : String(scValToNative(s.result!.retval));
+}
+
+// --- Private (ZK) eligibility: a holder proves in-browser that their hidden country is allowed. ---
+
+/** The token's ZK allowed-country set (its on-chain policy). */
+export async function readZkAllowed(token: string): Promise<number[]> {
+  const identity = await readIdentity(token);
+  const s = await sim(identity, 'allowed', []);
+  return rpc.Api.isSimulationError(s) ? [] : (scValToNative(s.result!.retval) as number[]);
+}
+
+/** Whether an account has proven ZK eligibility for a token. */
+export async function readIsVerified(token: string, account: string): Promise<boolean> {
+  const s = await sim(HUB, 'is_verified', [scAddr(token), scAddr(account)]);
+  return rpc.Api.isSimulationError(s) ? false : scValToNative(s.result!.retval) === true;
+}
+
+/**
+ * Holder self-prove: reads the token's ZK identity + allowed set, generates a Groth16 proof in
+ * the browser that the (private) `country` is in the allowed set, and submits `register_self` +
+ * `prove_eligibility` on that identity — two wallet-signed txs. The country never leaves the
+ * browser. `onStep` fires before each on-chain step for progress UI.
+ */
+export async function proveEligibility(
+  token: string, account: string, country: number, sign: SignFn,
+  onStep?: (phase: 'register' | 'prove') => void,
+): Promise<{ registerHash: string; proveHash: string }> {
+  const identity = await readIdentity(token);
+  const allowed = (await readZkAllowed(token)).map(String);
+  const secret = BigInt(
+    '0x' + [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, '0')).join(''),
+  );
+  const { proof, commitment } = await generateProof(country, secret, allowed);
+  const bytes = encodeProof(proof);
+  onStep?.('register');
+  const acc1 = await server.getAccount(account);
+  const regTx = buildFrom(acc1, identity, 'register_self',
+    [scAddr(account), u256(commitment) as unknown as xdr.ScVal] as unknown as ReturnType<typeof addr>[]);
+  const registerHash = await signSendPoll(regTx, sign, 'register_self');
+  onStep?.('prove');
+  const acc2 = await server.getAccount(account);
+  const proveTx = buildFrom(acc2, identity, 'prove_eligibility',
+    [scAddr(account), u256(commitment) as unknown as xdr.ScVal, proofScVal(bytes.a, bytes.b, bytes.c) as unknown as xdr.ScVal] as unknown as ReturnType<typeof addr>[]);
+  const proveHash = await signSendPoll(proveTx, sign, 'prove_eligibility');
+  return { registerHash, proveHash };
 }

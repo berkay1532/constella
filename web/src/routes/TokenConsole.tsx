@@ -5,9 +5,17 @@ import { getToken } from '../tokenStore';
 import {
   mint, attestCountry, readIdentity, readInvestorCount, readTokenBalance, readIsDenied,
   setInvestorCap, setMaxBalance, setMaxHolders, pauseToken, unpauseToken, addToDenylist,
+  proveEligibility, readIsVerified,
 } from '../hub';
 
 const EXPLORER = 'https://stellar.expert/explorer/testnet';
+
+const ZK_PROVE_STEPS = [
+  'Generating witness & Groth16 proof in your browser',
+  'Encoding proof for the on-chain verifier (BLS12-381)',
+  'Registering your private commitment',
+  'Verifying the proof on-chain',
+];
 
 export function TokenConsole() {
   const { id = '' } = useParams();
@@ -24,10 +32,14 @@ export function TokenConsole() {
   const [balLabel, setBalLabel] = useState('');
   const [mbCap, setMbCap] = useState('0');
   const [mhCap, setMhCap] = useState(0);
+  const [zkCountry, setZkCountry] = useState('840');
+  const [zkStep, setZkStep] = useState(-1);
+  const [verified, setVerified] = useState(false);
 
   const cfg = rec?.config;
   useEffect(() => {
     if (cfg && (cfg.country_restrict.length || cfg.max_investors)) readIdentity(id).then(setIdentity).catch(() => {});
+    if (cfg && cfg.zk_eligibility && address) readIsVerified(id, address).then(setVerified).catch(() => {});
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!address) {
@@ -93,7 +105,44 @@ export function TokenConsole() {
             </div>
           </div>
 
-          {(cfg.country_restrict.length > 0 || cfg.max_investors > 0) && (
+          {cfg.zk_eligibility && (
+            <div className="op full">
+              <h4>Prove eligibility (zero-knowledge)</h4>
+              <p className="op-sub">
+                Prove your country is allowed <strong>without revealing which country</strong> — a Groth16 proof
+                generated in your browser. Status: {verified ? <span style={{ color: 'var(--good)' }}>✓ eligible (country private)</span> : <span style={{ color: 'var(--faint)' }}>not proven yet</span>}
+              </p>
+              <div className="op-row">
+                <select className="inp narrow" value={zkCountry} onChange={(e) => setZkCountry(e.target.value)}>
+                  <option value="840">🇺🇸 US (840)</option>
+                  <option value="276">🇩🇪 DE (276)</option>
+                  <option value="792">🇹🇷 TR (792)</option>
+                  <option value="250">🇫🇷 FR (250)</option>
+                </select>
+                <button className="btn sm cyan" disabled={zkStep >= 0 && zkStep < 4} onClick={async () => {
+                  setErr(''); setMsg(''); setZkStep(0);
+                  try {
+                    await proveEligibility(id, address, Number(zkCountry), sign, (p) => setZkStep(p === 'register' ? 2 : 3));
+                    setZkStep(4); setVerified(true); setMsg('Proven eligible — your country stayed private.');
+                  } catch (e) {
+                    setZkStep(-1);
+                    setErr(String((e as Error).message || e).includes('not in the allowed') ? 'Not eligible — and the app never learned your country.' : `Prove rejected: ${String((e as Error).message || e)}`);
+                  }
+                }}>{zkStep >= 0 && zkStep < 4 ? 'Proving…' : 'Prove my eligibility'}</button>
+              </div>
+              {zkStep >= 0 && (
+                <ul className="zk-pipe">
+                  {ZK_PROVE_STEPS.map((s, i) => (
+                    <li key={i} className={i < zkStep ? 'done' : i === zkStep ? 'active' : ''}>
+                      <span className="zs">{i < zkStep ? '✓' : i === zkStep ? '' : i + 1}</span><span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {!cfg.zk_eligibility && (cfg.country_restrict.length > 0 || cfg.max_investors > 0) && (
             <div className="op">
               <h4>Attest identity</h4>
               <p className="op-sub">You are the attestor — write a holder's country to this token's identity{identity ? ` · ${identity.slice(0, 8)}…` : ''}.</p>

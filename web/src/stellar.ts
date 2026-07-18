@@ -186,7 +186,7 @@ export const submitZkTransfer = (from: string, to: string, amount: number, sign:
 
 // --- ZK eligibility: client-side register_self + prove_eligibility (Freighter-signed) ---
 
-const u256 = (dec: string) => nativeToScVal(BigInt(dec), { type: 'u256' });
+export const u256 = (dec: string) => nativeToScVal(BigInt(dec), { type: 'u256' });
 
 // `xdr.ScVal.scvBytes` is typed as taking a Node `Buffer`, but this is a browser build with
 // no `@types/node` (and no `Buffer` global) — the underlying js-xdr writer accepts any
@@ -195,7 +195,7 @@ const u256 = (dec: string) => nativeToScVal(BigInt(dec), { type: 'u256' });
 type ScvBytesArg = Parameters<typeof xdr.ScVal.scvBytes>[0];
 const scvBytes = (v: Uint8Array) => xdr.ScVal.scvBytes(v as unknown as ScvBytesArg);
 
-function proofScVal(a: Uint8Array, b: Uint8Array, c: Uint8Array) {
+export function proofScVal(a: Uint8Array, b: Uint8Array, c: Uint8Array) {
   const entry = (k: string, v: xdr.ScVal) =>
     new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol(k), val: v });
   // A #[contracttype] struct serializes as a symbol-keyed ScMap sorted by key (a,b,c).

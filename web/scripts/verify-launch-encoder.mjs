@@ -19,13 +19,14 @@ function launchConfigScVal(cfg) {
     e('max_holders', u32(cfg.max_holders)),
     e('max_investors', u32(cfg.max_investors)),
     e('transfer_window', xdr.ScVal.scvBool(cfg.transfer_window)),
+    e('zk_eligibility', xdr.ScVal.scvBool(cfg.zk_eligibility)),
   ]);
 }
 
 const cfg = {
   admin: 'GDXK5YGKCYYQYIEGWQNVTQXN7MK6VDDCA5UV4ZYP7TWWEGTMVSW3VIFC',
   denylist: true, max_balance: '1000', country_restrict: [840, 276],
-  max_holders: 5, lockup: 3600, transfer_window: false, max_investors: 2,
+  max_holders: 5, lockup: 3600, transfer_window: false, max_investors: 2, zk_eligibility: false,
 };
 const sv = launchConfigScVal(cfg);
 const keys = sv.map().map((en) => en.key().sym().toString());

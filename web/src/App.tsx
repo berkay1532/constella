@@ -4,7 +4,6 @@ import { LaunchWizard } from './routes/LaunchWizard';
 import { TokenConsole } from './routes/TokenConsole';
 import { Tokens } from './routes/Tokens';
 import { Docs } from './routes/Docs';
-import { LegacyDemo } from './routes/LegacyDemo';
 import { useWallet } from './wallet';
 
 export function App() {
@@ -29,7 +28,6 @@ export function App() {
           <Route path="/tokens" element={<Tokens />} />
           <Route path="/token/:id" element={<TokenConsole />} />
           <Route path="/docs" element={<Docs />} />
-          <Route path="/zk" element={<LegacyDemo />} />
         </Routes>
       </div>
       <footer className="site-foot">
