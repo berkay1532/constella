@@ -26,8 +26,8 @@ IDHASH=$(stellar contract upload --wasm "$W/constella_identity_mock.wasm" --sour
 echo "▸ Deploying hub…"
 HUB=$(stellar contract deploy --wasm "$W/constella_hub.wasm" --source deployer --network "$NET" -- --platform_admin "$DEP" 2>/dev/null | tail -1)
 
-KINDS=(denylist max_balance country_restrict max_holders lockup transfer_window max_investors)
-WASMS=(constella_hub_module_denylist constella_hub_module_max_balance constella_hub_module_country_restrict constella_hub_module_max_holders constella_hub_module_lockup constella_hub_module_transfer_window constella_hub_module_max_investors_per_country)
+KINDS=(denylist max_balance country_restrict max_holders lockup transfer_window max_investors zk_eligibility)
+WASMS=(constella_hub_module_denylist constella_hub_module_max_balance constella_hub_module_country_restrict constella_hub_module_max_holders constella_hub_module_lockup constella_hub_module_transfer_window constella_hub_module_max_investors_per_country constella_hub_module_zk_eligibility)
 ADDRS=()
 
 for i in "${!KINDS[@]}"; do
@@ -44,6 +44,15 @@ stellar contract invoke --id "$HUB" --source deployer --network "$NET" -- set_id
 for i in "${!KINDS[@]}"; do
   stellar contract invoke --id "$HUB" --source deployer --network "$NET" -- set_module_addr --kind "${KINDS[$i]}" --addr "${ADDRS[$i]}" >/dev/null
 done
+
+echo "▸ Deploying shared ZK stack (verifier + zk-identity wasm + VK)…"
+ZKID_HASH=$(stellar contract upload --wasm "$W/constella_module_identity_zk.wasm" --source deployer --network "$NET" 2>/dev/null | tail -1)
+VERIFIER=$(stellar contract deploy --wasm "$W/constella_zk_verifier.wasm" --source deployer --network "$NET" 2>/dev/null | tail -1)
+# The verifying key comes from the circuit's trusted setup (tools/zk-encode emits it as JSON).
+VKJSON=$(cargo run --manifest-path tools/zk-encode/Cargo.toml --quiet 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{process.stdout.write(JSON.stringify(JSON.parse(s).vk))})")
+stellar contract invoke --id "$HUB" --source deployer --network "$NET" -- set_verifier --verifier "$VERIFIER" >/dev/null
+stellar contract invoke --id "$HUB" --source deployer --network "$NET" -- set_zk_identity_wasm --hash "$ZKID_HASH" >/dev/null
+stellar contract invoke --id "$HUB" --source deployer --network "$NET" -- set_zk_vk --vk "$VKJSON" >/dev/null
 
 # helper to look up an address by kind name
 addr_for() {
@@ -63,6 +72,7 @@ cat > "$OUT" <<JSON
   "rpcUrl": "https://soroban-testnet.stellar.org",
   "networkPassphrase": "Test SDF Network ; September 2015",
   "hub": "$HUB",
+  "verifier": "$VERIFIER",
   "modules": {
     "denylist": "$(addr_for denylist)",
     "max_balance": "$(addr_for max_balance)",
@@ -70,7 +80,8 @@ cat > "$OUT" <<JSON
     "max_holders": "$(addr_for max_holders)",
     "lockup": "$(addr_for lockup)",
     "transfer_window": "$(addr_for transfer_window)",
-    "max_investors": "$(addr_for max_investors)"
+    "max_investors": "$(addr_for max_investors)",
+    "zk_eligibility": "$(addr_for zk_eligibility)"
   }
 }
 JSON
