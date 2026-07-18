@@ -86,8 +86,9 @@ export function Docs() {
             per-token ZK identity for your token, and holders prove — in the token console — that their
             country is in the allowed set <em>without revealing which country it is</em>, using a Groth16
             proof generated entirely in the browser. The country value never leaves the device and is
-            never written on-chain; only the proof of eligibility is. A mint or transfer to a holder who
-            has not proven eligibility is rejected on-chain, just like every other rule.
+            never written on-chain; only the proof of eligibility is. A mint to an un-proven recipient is
+            rejected on-chain; a <strong>transfer requires both the sender and the recipient</strong> to
+            have proven eligibility — just like every other rule, enforced by the hub.
           </p>
           <p>
             The circuit is fixed to two allowed countries, and private eligibility replaces cleartext

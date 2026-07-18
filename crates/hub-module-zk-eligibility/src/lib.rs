@@ -1,8 +1,9 @@
 #![no_std]
-//! Multi-tenant ZK-eligibility module: gates transfers on the recipient's ZK eligibility
-//! flag (`is_verified`) read from the token's per-token ZK identity — never a cleartext
-//! country. A disallowed recipient shows up as "not eligible"; their country is never read
-//! or revealed. Stateless gate; all config keyed by token.
+//! Multi-tenant ZK-eligibility module: gates on the ZK eligibility flag (`is_verified`) read
+//! from the token's per-token ZK identity — never a cleartext country. A mint checks the
+//! recipient; a transfer checks BOTH parties (sender and recipient must be eligible). An
+//! ineligible party shows up as "not eligible"; their country is never read or revealed.
+//! Stateless gate; all config keyed by token.
 
 use constella_module_interface::IdentityClient;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
@@ -40,8 +41,9 @@ impl ZkEligibilityHubModule {
     pub fn can_create(env: Env, to: Address, _amount: i128, token: Address) -> bool {
         Self::eligible(&env, &token, &to)
     }
-    pub fn can_transfer(env: Env, _from: Address, to: Address, _amount: i128, token: Address) -> bool {
-        Self::eligible(&env, &token, &to)
+    pub fn can_transfer(env: Env, from: Address, to: Address, _amount: i128, token: Address) -> bool {
+        // Both parties must be ZK-eligible: the recipient (to receive) and the sender (to send).
+        Self::eligible(&env, &token, &from) && Self::eligible(&env, &token, &to)
     }
     pub fn transferred(_env: Env, _from: Address, _to: Address, _amount: i128, _token: Address) {}
     pub fn created(_env: Env, _to: Address, _amount: i128, _token: Address) {}

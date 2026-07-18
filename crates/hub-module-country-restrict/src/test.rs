@@ -33,6 +33,13 @@ fn eligibility_isolated_per_token_and_identity() {
     // unattested recipient is denied
     let bob = Address::generate(&env);
     assert!(!m.can_create(&bob, &1, &ta));
+
+    // can_transfer is both-party: sender AND recipient must be in the allow-list.
+    IdentityMockClient::new(&env, &id_a).set_country(&bob, &840); // bob = US on A
+    assert!(m.can_transfer(&alice, &bob, &1, &ta)); // both US ∈ {US} -> allowed
+    let carol = Address::generate(&env); // unattested
+    assert!(!m.can_transfer(&carol, &bob, &1, &ta)); // sender not attested -> denied
+    assert!(!m.can_transfer(&alice, &carol, &1, &ta)); // recipient not attested -> denied
 }
 
 #[test]

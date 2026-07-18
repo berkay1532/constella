@@ -26,11 +26,16 @@ fn gates_on_is_verified_isolated_per_token() {
     m.configure(&tb, &id_b);
 
     let alice = Address::generate(&env);
-    // alice is verified on token A's identity only.
+    let bob = Address::generate(&env);
+    // alice + bob are verified on token A's identity only.
     IdentityMockClient::new(&env, &id_a).set_verified(&alice, &true);
+    IdentityMockClient::new(&env, &id_a).set_verified(&bob, &true);
 
     assert!(m.can_create(&alice, &1, &ta)); // verified on A -> allowed
-    assert!(m.can_transfer(&Address::generate(&env), &alice, &1, &ta));
+    // can_transfer is both-party: both sender and recipient must be verified.
+    assert!(m.can_transfer(&bob, &alice, &1, &ta)); // both verified -> allowed
+    assert!(!m.can_transfer(&Address::generate(&env), &alice, &1, &ta)); // sender NOT verified -> denied
+    assert!(!m.can_transfer(&alice, &Address::generate(&env), &1, &ta)); // recipient NOT verified -> denied
     assert!(!m.can_create(&alice, &1, &tb)); // not verified on B -> denied (isolated)
     // an unverified recipient on A is denied
     assert!(!m.can_create(&Address::generate(&env), &1, &ta));

@@ -20,8 +20,8 @@ const ZK_PROVE_STEPS = [
 // Turn a raw Soroban HostError (with its verbose diagnostic-event log) into a plain reason.
 // The diagnostic events name the module hook that returned false, so we key off those.
 function humanize(msg: string): string {
-  if (/is_verified/.test(msg)) return "recipient hasn't proven ZK eligibility yet — they must prove in the console before they can receive.";
-  if (/country_of/.test(msg)) return "recipient's country isn't attested, or isn't in the allowed list.";
+  if (/is_verified/.test(msg)) return "a party isn't ZK-eligible — for a transfer BOTH sender and recipient must have proven eligibility in the console.";
+  if (/country_of/.test(msg)) return "a party's country isn't attested or isn't in the allowed list — a transfer requires BOTH sender and recipient.";
   if (/is_denied|Denied|denylist/i.test(msg)) return 'recipient is on the denylist.';
   if (/is_paused|paused|window/i.test(msg)) return 'transfers are currently frozen (transfer window).';
   if (/Error\(Contract, #6\)|can_transfer|can_create/.test(msg)) return "rejected by a compliance rule — the recipient isn't eligible (not attested / not proven).";
