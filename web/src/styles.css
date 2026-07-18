@@ -157,7 +157,7 @@ h1,h2,h3,h4 { text-wrap:balance; }
 .console-tabs { display:flex; gap:4px; padding:0 16px; border-top:1px solid var(--line); background:var(--void-2); }
 .ctab { font-family:var(--mono); font-size:.68rem; letter-spacing:.14em; text-transform:uppercase; color:var(--faint);
   background:transparent; border:none; border-bottom:2px solid transparent; padding:14px 12px; cursor:pointer; transition:color .18s, border-color .18s; }
-.ctab:hover { color:var(--muted); }
+.ctab:hover { color:var(--text); background:transparent; }
 .ctab.on { color:var(--iris-bright); border-bottom-color:var(--iris); }
 
 /* ZK eligibility gate — must be cleared before minting/transferring */
