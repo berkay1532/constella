@@ -49,17 +49,16 @@ export function Docs() {
             Every regulated tokenized asset has to answer two questions on <em>every</em> transfer:
             <strong> who is allowed to hold it</strong> (identity — jurisdiction, KYC, accreditation) and
             <strong> which rules apply</strong> (compliance — holder caps, lock-ups, concentration limits). On
-            Ethereum this two-layer model is standardized as{' '}
-            <a href="https://www.erc3643.org/" target="_blank" rel="noreferrer">ERC-3643 (T-REX)</a>, the standard
-            behind most permissioned real-world-asset tokens.
+            Stellar, this two-layer model is being standardized as{' '}
+            <a href="https://github.com/orgs/stellar/discussions/1814" target="_blank" rel="noreferrer">SEP-57</a>.
           </p>
           <p>
-            Stellar is standardizing the same model as{' '}
-            <a href="https://github.com/orgs/stellar/discussions/1814" target="_blank" rel="noreferrer">SEP-57</a> —
-            “T-REX for Stellar,” a draft led by OpenZeppelin. It describes a hook-based compliance engine (modules
-            run <code>created</code> / <code>transferred</code> / <code>destroyed</code> hooks inside the transfer),
-            an abstract identity interface that can be claim-based, Merkle-tree, or <strong>zero-knowledge</strong>,
-            and a SEP-41 token extended with regulatory controls.
+            SEP-57 is a draft Stellar Ecosystem Proposal for permissioned real-world-asset tokens, led by
+            OpenZeppelin. It describes a hook-based compliance engine (modules run <code>created</code> /{' '}
+            <code>transferred</code> / <code>destroyed</code> hooks inside the transfer), an abstract identity
+            interface that can be claim-based, Merkle-tree, or <strong>zero-knowledge</strong>, and a{' '}
+            <a href="https://developers.stellar.org/docs/tokens/token-interface" target="_blank" rel="noreferrer">SEP-41</a>{' '}
+            token extended with regulatory controls.
           </p>
           <p>
             Constella follows this architecture directly: a hook-based modular compliance dispatcher, a per-token
