@@ -81,3 +81,13 @@ Also deploy the shared `zk-verifier`, upload the `module-identity-zk` wasm (reco
 5. Bootstrap: verifier + zk-identity wasm + VK; update `hub.testnet.json`.
 6. Frontend: prove.ts param, hub.ts prove flow, wizard toggle, console ZK panel, remove demo.
 7. Live testnet verification + evidence.
+
+---
+
+## Live testnet evidence — private (ZK) eligibility
+
+Verified end-to-end against the bootstrapped hub `CCY5WSFHF5ZROF3IPVZAXNSTT63CPJWITYG36VBOK2JMKF7UX5HSZWBC`:
+
+- **One-signature launch** of a ZK token (`country_restrict:[840,276], zk_eligibility:true`): tx [`843c82b5…`](https://stellar.expert/explorer/testnet/tx/843c82b58eba87ba322421a0a0ce29063b5538bc1056cc9f2d4a6ccf066d7a1f) → token `CC6W6UJVJCI7MFWGSOEFP3UDKSTIVDWK6ULBI7HKSOWLGEP73CAKVDSR`. The hub deployed a per-token ZK identity `CB6EP4RCGOY3XQRAYFROI7GAOHIAHVWLQ5G3V6IOCYMGM6DH4EMM5N47` and set its policy (VK + allowed `{840,276}`).
+- A holder proved eligibility with a browser-style Groth16 proof (`register_self` + `prove_eligibility`) — `hub.is_verified(token, dave) = true`; an un-proven account `hub.is_verified(token, eve) = false`. **The country was never submitted or revealed.**
+- Minting to the proven holder **passed** (balance 10); minting to the un-proven holder **reverted** on-chain — private eligibility enforced by the hub, exactly like every other rule.
