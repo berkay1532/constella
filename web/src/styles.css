@@ -189,6 +189,65 @@ h1,h2,h3,h4 { text-wrap:balance; }
 .state h2 { font-size:1.4rem; letter-spacing:-.02em; }
 .state p { color:var(--muted); max-width:44ch; margin:10px auto 22px; }
 
+/* ---------- landing feature grid ---------- */
+.features { margin-top:66px; }
+.feat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); gap:14px; margin-top:24px; }
+.feat { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; }
+.feat .fi { width:34px; height:34px; border-radius:9px; display:grid; place-items:center; font-size:1.05rem;
+  background:rgba(139,125,255,.1); border:1px solid var(--line-soft); }
+.feat h4 { margin:12px 0 4px; font-size:.96rem; }
+.feat p { margin:0; color:var(--muted); font-size:.84rem; line-height:1.55; }
+
+/* ---------- launched-tokens banner (landing) ---------- */
+.mine-banner { margin-top:34px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:16px 20px; border:1px solid var(--line-soft); border-radius:14px; background:rgba(139,125,255,.06); }
+.mine-banner .mb-txt { font-size:.92rem; }
+.mine-banner .mb-txt b { color:var(--iris-bright); }
+.mine-banner .btn { margin-left:auto; }
+
+/* ---------- my-tokens dashboard ---------- */
+.tok-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; margin-top:8px; }
+.tok-card { background:linear-gradient(180deg,var(--panel),var(--void-2)); border:1px solid var(--line); border-radius:16px;
+  padding:20px; display:flex; flex-direction:column; gap:12px; text-decoration:none; color:inherit;
+  transition:border-color .18s, transform .12s; }
+.tok-card:hover { border-color:var(--iris-dim); transform:translateY(-2px); text-decoration:none; }
+.tok-card .tc-addr { font-family:var(--mono); font-size:.92rem; color:var(--text); }
+.tok-card .tc-meta { font-family:var(--mono); font-size:.7rem; color:var(--faint); }
+.tok-card .tc-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.tok-card .tc-go { margin-top:4px; color:var(--iris-bright); font-size:.85rem; }
+
+/* ---------- docs ---------- */
+.docs { display:grid; grid-template-columns:190px 1fr; gap:44px; margin-top:24px; align-items:start; }
+.docs-nav { position:sticky; top:82px; display:flex; flex-direction:column; gap:9px; }
+.docs-nav a { color:var(--muted); font-size:.85rem; text-decoration:none; padding:2px 0; border-left:2px solid transparent; padding-left:12px; margin-left:-12px; }
+.docs-nav a:hover { color:var(--text); border-color:var(--iris-dim); }
+.docs-body { max-width:64ch; }
+.docs-body h3 { margin:38px 0 10px; font-size:1.2rem; letter-spacing:-.02em; scroll-margin-top:90px; }
+.docs-body h3:first-of-type { margin-top:0; }
+.docs-body p { color:var(--text); opacity:.86; }
+.docs-body a { color:var(--iris-bright); }
+.docs-body code { font-family:var(--mono); font-size:.85em; background:var(--panel-2); border:1px solid var(--line); border-radius:5px; padding:1px 6px; }
+.doc-mods { list-style:none; padding:0; margin:14px 0 0; display:flex; flex-direction:column; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+.doc-mods li { background:var(--panel); padding:14px 16px; display:flex; gap:14px; align-items:flex-start; }
+.doc-mods .dm-star { width:30px; height:30px; border-radius:8px; flex:none; display:grid; place-items:center; font-size:.95rem;
+  background:var(--panel-2); border:1px solid var(--line); }
+.doc-mods .dm-name { font-weight:600; font-size:.9rem; }
+.doc-mods .dm-name span { font-family:var(--mono); font-size:.68rem; color:var(--faint); margin-left:8px; font-weight:400; }
+.doc-mods .dm-desc { color:var(--muted); font-size:.83rem; margin-top:2px; }
+
+/* ---------- site footer (product routes) ---------- */
+.site-foot { border-top:1px solid var(--line); margin-top:84px; padding:34px 0; }
+.site-foot .foot-in { max-width:var(--maxw); margin:0 auto; padding:0 24px; display:flex; justify-content:space-between;
+  gap:20px; flex-wrap:wrap; color:var(--faint); font-family:var(--mono); font-size:.74rem; }
+.site-foot .foot-in a { color:var(--muted); text-decoration:none; }
+.site-foot .foot-in a:hover { color:var(--text); }
+.site-foot .foot-links { display:flex; gap:20px; flex-wrap:wrap; }
+
+@media (max-width:720px) {
+  .docs { grid-template-columns:1fr; }
+  .docs-nav { position:static; flex-direction:row; flex-wrap:wrap; gap:14px; }
+}
+
 /* ===========================================================================
    Legacy /zk demo compatibility — restyled to the new tokens.
    =========================================================================== */
