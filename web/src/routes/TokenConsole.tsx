@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useWallet } from '../wallet';
 import { getToken } from '../tokenStore';
 import {
-  mint, attestCountry, readIdentity, readInvestorCount, readTokenBalance, readIsDenied,
+  mint, transfer, attestCountry, readIdentity, readInvestorCount, readTokenBalance, readIsDenied,
   setInvestorCap, setMaxBalance, setMaxHolders, pauseToken, unpauseToken, addToDenylist,
   proveEligibility, readIsVerified,
 } from '../hub';
@@ -32,6 +32,8 @@ export function TokenConsole() {
   const [balLabel, setBalLabel] = useState('');
   const [mbCap, setMbCap] = useState('0');
   const [mhCap, setMhCap] = useState(0);
+  const [xferTo, setXferTo] = useState('');
+  const [xferAmt, setXferAmt] = useState('10');
   const [zkCountry, setZkCountry] = useState('840');
   const [zkStep, setZkStep] = useState(-1);
   const [verified, setVerified] = useState(false);
@@ -102,6 +104,16 @@ export function TokenConsole() {
               <input className="inp" placeholder="recipient G…" value={mintTo} onChange={(e) => setMintTo(e.target.value)} />
               <input className="inp narrow" type="number" value={mintAmt} onChange={(e) => setMintAmt(e.target.value)} />
               <button className="btn sm" onClick={() => run('Mint', () => mint(address, id, mintTo, mintAmt, sign))}>Mint</button>
+            </div>
+          </div>
+
+          <div className="op">
+            <h4>Transfer</h4>
+            <p className="op-sub">Send from your wallet to another holder. <code>can_transfer</code> checks the recipient's eligibility on-chain first — an un-attested / un-proven recipient is rejected.</p>
+            <div className="op-row">
+              <input className="inp" placeholder="recipient G…" value={xferTo} onChange={(e) => setXferTo(e.target.value)} />
+              <input className="inp narrow" type="number" value={xferAmt} onChange={(e) => setXferAmt(e.target.value)} />
+              <button className="btn sm" onClick={() => run('Transfer', () => transfer(address, id, xferTo, xferAmt, sign))}>Transfer</button>
             </div>
           </div>
 
