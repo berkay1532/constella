@@ -17,6 +17,18 @@ const ZK_PROVE_STEPS = [
   'Verifying the proof on-chain',
 ];
 
+// Turn a raw Soroban HostError (with its verbose diagnostic-event log) into a plain reason.
+// The diagnostic events name the module hook that returned false, so we key off those.
+function humanize(msg: string): string {
+  if (/is_verified/.test(msg)) return "recipient hasn't proven ZK eligibility yet — they must prove in the console before they can receive.";
+  if (/country_of/.test(msg)) return "recipient's country isn't attested, or isn't in the allowed list.";
+  if (/is_denied|Denied|denylist/i.test(msg)) return 'recipient is on the denylist.';
+  if (/is_paused|paused|window/i.test(msg)) return 'transfers are currently frozen (transfer window).';
+  if (/Error\(Contract, #6\)|can_transfer|can_create/.test(msg)) return "rejected by a compliance rule — the recipient isn't eligible (not attested / not proven).";
+  const m = msg.match(/Error\([^)]+\)/);
+  return m ? `on-chain error ${m[0]}` : msg.slice(0, 160);
+}
+
 export function TokenConsole() {
   const { id = '' } = useParams();
   const { address, sign } = useWallet();
@@ -60,11 +72,11 @@ export function TokenConsole() {
   const run = async (label: string, fn: () => Promise<string | void>) => {
     setMsg(`${label}…`); setErr('');
     try { const h = await fn(); setMsg(`${label} succeeded${typeof h === 'string' ? ` · ${h.slice(0, 10)}…` : ''}`); }
-    catch (e) { setErr(`${label} rejected: ${String((e as Error).message || e)}`); setMsg(''); }
+    catch (e) { setErr(`${label} rejected: ${humanize(String((e as Error).message || e))}`); setMsg(''); }
   };
   const read = async (label: string, fn: () => Promise<string>) => {
     setErr('');
-    try { setBalLabel(label); setBal(await fn()); } catch (e) { setErr(`${label} failed: ${String((e as Error).message || e)}`); }
+    try { setBalLabel(label); setBal(await fn()); } catch (e) { setErr(`${label} failed: ${humanize(String((e as Error).message || e))}`); }
   };
 
   const chips = [
