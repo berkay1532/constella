@@ -181,12 +181,31 @@ export function TokenConsole() {
 
               <div className="op">
                 <h4>Transfer</h4>
-                <p className="op-sub">Send from your wallet to another holder. <code>can_transfer</code> checks the recipient's eligibility on-chain first — an un-attested / un-proven recipient is rejected.</p>
+                <p className="op-sub">Send tokens from your wallet to another holder. <code>can_transfer</code> is checked on-chain before it settles.</p>
                 <div className="op-row">
                   <input className="inp" placeholder="recipient G…" value={xferTo} onChange={(e) => setXferTo(e.target.value)} />
                   <input className="inp narrow" type="number" value={xferAmt} onChange={(e) => setXferAmt(e.target.value)} />
                   <button className="btn sm" onClick={() => run('Transfer', () => transfer(address, id, xferTo, xferAmt, sign))}>Transfer</button>
                 </div>
+                {cfg.zk_eligibility && (
+                  <div className="info-box zk">
+                    <span className="ib-ico">🔒</span>
+                    <span>
+                      The recipient must <strong>prove their own eligibility first</strong> — from their own wallet, in this
+                      console. You can't prove on their behalf: the Groth16 proof needs their private country input and their
+                      signature. A transfer checks <strong>both</strong> parties, so an un-proven recipient is rejected on-chain.
+                    </span>
+                  </div>
+                )}
+                {!cfg.zk_eligibility && cfg.country_restrict.length > 0 && (
+                  <div className="info-box">
+                    <span className="ib-ico">🌍</span>
+                    <span>
+                      The recipient must be <strong>attested to an allowed country first</strong> — do it under the
+                      Compliance settings tab. Both parties are checked, so an un-attested recipient is rejected on-chain.
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="op full">

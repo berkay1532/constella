@@ -171,6 +171,15 @@ h1,h2,h3,h4 { text-wrap:balance; }
   border:1px dashed var(--line); color:var(--faint); font-size:.82rem; background:var(--void-2); }
 .gate-done { display:flex; align-items:center; gap:9px; padding:14px 24px; font-size:.86rem; color:var(--good);
   border-top:1px solid var(--line); background:rgba(69,214,138,.07); }
+
+/* inline info / eligibility callout inside an operation panel */
+.info-box { display:flex; gap:10px; margin-top:14px; padding:12px 14px; border-radius:11px; font-size:.8rem; line-height:1.55;
+  color:var(--muted); background:var(--void-2); border:1px solid var(--line); border-left:2px solid var(--iris-dim); }
+.info-box .ib-ico { flex:none; line-height:1.5; }
+.info-box strong { color:var(--text); font-weight:600; }
+.info-box code { font-size:.92em; }
+.info-box.zk { border-left-color:var(--cyan-dim); }
+.info-box.zk strong { color:var(--cyan); }
 .ops { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line); }
 .op { background:var(--panel); padding:22px 24px; }
 .op.full { grid-column:1 / -1; }
