@@ -7,7 +7,30 @@
 //! dispatcher and modules use to call one another. Mirrors OpenZeppelin's
 //! `ComplianceHook` surface so modules are portable to the OZ dispatcher.
 
+use soroban_sdk::crypto::bls12_381::{Bls12381G1Affine as G1Affine, Bls12381G2Affine as G2Affine};
 use soroban_sdk::{contractclient, contracterror, contracttype, Address, Env, Vec};
+
+/// Groth16 (BLS12-381) verification key. Shared here (rather than in the `zk-verifier`
+/// `#[contract]` crate) so non-verifier crates — the hub, the ZK identity — can carry it
+/// without depending on a `#[contract]`. Layout is identical to the original definition.
+#[derive(Clone)]
+#[contracttype]
+pub struct VerificationKey {
+    pub alpha: G1Affine,
+    pub beta: G2Affine,
+    pub gamma: G2Affine,
+    pub delta: G2Affine,
+    pub ic: Vec<G1Affine>,
+}
+
+/// Groth16 proof (BLS12-381). Shared alongside [`VerificationKey`].
+#[derive(Clone)]
+#[contracttype]
+pub struct Proof {
+    pub a: G1Affine,
+    pub b: G2Affine,
+    pub c: G1Affine,
+}
 
 /// Hook points the compliance dispatcher exposes. A module registers against one
 /// or more hooks; the dispatcher only invokes a module on the hooks it registered for.

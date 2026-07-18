@@ -13,7 +13,8 @@ use soroban_sdk::{
     Address, Bytes, Env, Vec, U256,
 };
 
-use constella_zk_verifier::{Groth16Verifier, Proof, VerificationKey};
+use constella_module_interface::{Proof, VerificationKey};
+use constella_zk_verifier::Groth16Verifier;
 
 use crate::{IdentityZk, IdentityZkClient};
 

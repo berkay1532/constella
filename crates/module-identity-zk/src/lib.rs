@@ -9,7 +9,8 @@
 //! Same `IdentityProvider` surface as the mock (`is_verified` / `country_of`), so it is
 //! a drop-in for the compliance modules — except `country_of` returns `None` (private).
 
-use constella_zk_verifier::{Groth16VerifierClient, Proof, VerificationKey};
+use constella_module_interface::{Proof, VerificationKey};
+use constella_zk_verifier::Groth16VerifierClient;
 use soroban_sdk::{
     contract, contractimpl, contracttype, crypto::bls12_381::Bls12381Fr as Fr, vec, Address, Env,
     Vec, U256,

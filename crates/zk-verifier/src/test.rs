@@ -13,7 +13,8 @@ use soroban_sdk::{
     Bytes, Env, Vec, U256,
 };
 
-use crate::{Groth16Verifier, Groth16VerifierClient, Proof, VerificationKey};
+use crate::{Groth16Verifier, Groth16VerifierClient};
+use constella_module_interface::{Proof, VerificationKey};
 
 const PROOF: &str = include_str!("../../../zk/data/proof.json");
 const VK: &str = include_str!("../../../zk/data/verification_key.json");

@@ -8,9 +8,10 @@
 //! Constella uses this to verify a proof that an investor's (hidden) country is in an
 //! allowed set and matches an issuer-registered commitment — see `module-identity-zk`.
 
+use constella_module_interface::{Proof, VerificationKey};
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype,
-    crypto::bls12_381::{Fr, G1Affine, G2Affine},
+    contract, contracterror, contractimpl,
+    crypto::bls12_381::Bls12381Fr as Fr,
     vec, Env, Vec,
 };
 
@@ -19,24 +20,6 @@ use soroban_sdk::{
 #[repr(u32)]
 pub enum Groth16Error {
     MalformedVerifyingKey = 0,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct VerificationKey {
-    pub alpha: G1Affine,
-    pub beta: G2Affine,
-    pub gamma: G2Affine,
-    pub delta: G2Affine,
-    pub ic: Vec<G1Affine>,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct Proof {
-    pub a: G1Affine,
-    pub b: G2Affine,
-    pub c: G1Affine,
 }
 
 #[contract]
