@@ -242,12 +242,15 @@ export async function submitZkEligibility(
   commitmentDec: string,
   proof: { a: Uint8Array; b: Uint8Array; c: Uint8Array },
   sign: SignFn,
+  onStep?: (phase: 'register' | 'prove') => void,
 ): Promise<{ ok: boolean; registerHash: string; proveHash: string }> {
   if (!ZK) throw new Error('ZK not deployed');
+  onStep?.('register');
   const acc1 = await server.getAccount(account);
   const registerTx = buildFrom(acc1, ZK.identityZk, 'register_self', [addr(account), u256(commitmentDec)]);
   const registerHash = await signSendPoll(registerTx, sign, 'register_self');
 
+  onStep?.('prove');
   const acc2 = await server.getAccount(account);
   const proveTx = buildFrom(acc2, ZK.identityZk, 'prove_eligibility', [
     addr(account),

@@ -1,9 +1,23 @@
 import { useEffect, useReducer, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useWallet } from '../wallet';
 import { launchToken, blankConfig, type LaunchConfig } from '../hub';
 import { saveToken } from '../tokenStore';
 import { Constellation } from '../sky';
+
+const EXPLORER = 'https://stellar.expert/explorer/testnet';
+
+function configChips(cfg: LaunchConfig): string[] {
+  return [
+    cfg.denylist && 'denylist',
+    cfg.max_balance !== '0' && 'max-balance',
+    cfg.country_restrict.length && 'country',
+    cfg.max_holders && `max-holders · ${cfg.max_holders}`,
+    cfg.lockup && `lockup · ${cfg.lockup}s`,
+    cfg.transfer_window && 'transfer-window',
+    cfg.max_investors && `max-investors · ${cfg.max_investors}`,
+  ].filter(Boolean) as string[];
+}
 
 type Action = { field: keyof LaunchConfig; value: LaunchConfig[keyof LaunchConfig] };
 const reducer = (s: LaunchConfig, a: Action): LaunchConfig => ({ ...s, [a.field]: a.value });
@@ -36,7 +50,7 @@ export function LaunchWizard() {
   const [step, setStep] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const nav = useNavigate();
+  const [result, setResult] = useState<{ token: string; hash: string } | null>(null);
   const set = (field: keyof LaunchConfig, value: LaunchConfig[keyof LaunchConfig]) => dispatch({ field, value });
 
   useEffect(() => { if (address && cfg.admin !== address) set('admin', address); }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -61,10 +75,36 @@ export function LaunchWizard() {
       setStatus('Awaiting your signature…');
       const { token, hash } = await launchToken(cfg, sign);
       saveToken({ id: token, admin: address, config: cfg, hash, createdAt: Date.now() });
-      setStatus('Launched — opening console…');
-      nav(`/token/${token}`);
+      setStatus('');
+      setResult({ token, hash });
     } catch (e) { setError(String((e as Error).message || e)); setStatus(''); }
   };
+
+  if (result) {
+    const chips = configChips(cfg);
+    return (
+      <section className="block">
+        <div className="panel launched">
+          <div className="launched-constel"><Constellation mods={active} labels={STAR_LABELS} /></div>
+          <span className="eyebrow">Launched</span>
+          <h2>Your token is live.</h2>
+          <p className="muted">A generic compliant token, deployed and wired to {active.length} module{active.length === 1 ? '' : 's'} — administered only by your wallet.</p>
+          <div className="launched-rows">
+            <div className="lr"><span className="lr-k">Token</span>
+              <a className="lr-v" href={`${EXPLORER}/contract/${result.token}`} target="_blank" rel="noreferrer">{result.token.slice(0, 10)}…{result.token.slice(-6)} ↗</a></div>
+            <div className="lr"><span className="lr-k">Launch tx</span>
+              <a className="lr-v" href={`${EXPLORER}/tx/${result.hash}`} target="_blank" rel="noreferrer">{result.hash.slice(0, 12)}… ↗</a></div>
+            <div className="lr"><span className="lr-k">Modules</span>
+              <span className="tok-chips">{chips.length ? chips.map((c) => <span key={c} className="tag">{c}</span>) : <span className="tag">none</span>}</span></div>
+          </div>
+          <div className="launched-cta">
+            <Link className="btn" to={`/token/${result.token}`}>Open token console →</Link>
+            <button className="btn ghost" onClick={() => { setResult(null); setStep(0); }}>Launch another</button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   const short = `${address.slice(0, 6)}…${address.slice(-4)}`;
   const launching = !!status && !error;

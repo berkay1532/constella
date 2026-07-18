@@ -189,6 +189,30 @@ h1,h2,h3,h4 { text-wrap:balance; }
 .state h2 { font-size:1.4rem; letter-spacing:-.02em; }
 .state p { color:var(--muted); max-width:44ch; margin:10px auto 22px; }
 
+/* ---------- ZK proof pipeline ---------- */
+.zk-pipe { list-style:none; padding:0; margin:16px 0 0; display:flex; flex-direction:column; gap:3px; }
+.zk-pipe li { display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:10px; font-size:.85rem;
+  color:var(--faint); background:var(--panel-2); border:1px solid transparent; }
+.zk-pipe li.active { color:var(--cyan); border-color:var(--cyan-dim); background:rgba(79,224,212,.06); }
+.zk-pipe li.done { color:var(--good); }
+.zk-pipe .zs { width:22px; height:22px; border-radius:50%; flex:none; display:grid; place-items:center;
+  font-size:.7rem; font-family:var(--mono); border:1px solid currentColor; }
+.zk-pipe li.active .zs { border:2px solid var(--cyan-dim); border-top-color:var(--cyan); animation:zkspin .8s linear infinite; }
+@keyframes zkspin { to { transform:rotate(360deg); } }
+
+/* ---------- launch success ---------- */
+.launched { padding:34px; text-align:center; }
+.launched-constel { height:190px; max-width:440px; margin:0 auto 6px; }
+.launched-constel .constel-canvas { min-height:0; height:100%; border:none; background:transparent; }
+.launched h2 { font-size:1.75rem; letter-spacing:-.025em; margin:6px 0 0; }
+.launched > .muted { max-width:48ch; margin:10px auto 0; }
+.launched-rows { max-width:520px; margin:26px auto 0; text-align:left; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+.lr { display:flex; justify-content:space-between; gap:16px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
+.lr:last-child { border-bottom:none; }
+.lr-k { font-family:var(--mono); font-size:.7rem; text-transform:uppercase; letter-spacing:.12em; color:var(--faint); }
+.lr-v { font-family:var(--mono); font-size:.85rem; color:var(--iris-bright); }
+.launched-cta { display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap; }
+
 /* ---------- landing feature grid ---------- */
 .features { margin-top:66px; }
 .feat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(232px,1fr)); gap:14px; margin-top:24px; }
@@ -269,6 +293,10 @@ header .tag { color:var(--muted); margin:6px 0 0; }
 .form { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-top:12px; }
 .form label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
 select, input { background:var(--panel-2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-size:14px; font-family:inherit; }
+/* legacy bare <button> (the new routes all use .btn, which overrides this) */
+button { background:var(--iris); color:#0b0713; border:none; border-radius:9px; padding:10px 16px; font-weight:600; font-family:inherit; cursor:pointer; transition:background .2s; }
+button:hover { background:var(--iris-bright); }
+button:disabled { opacity:.55; cursor:default; }
 .holders-table { width:100%; border-collapse:collapse; margin-top:12px; }
 .holders-table th { text-align:left; font-size:12px; color:var(--muted); font-weight:500; padding:6px 8px; border-bottom:1px solid var(--line); }
 .holders-table td { padding:10px 8px; border-bottom:1px solid var(--line); }

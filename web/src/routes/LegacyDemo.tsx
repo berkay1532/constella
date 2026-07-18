@@ -68,6 +68,7 @@ export function LegacyDemo() {
   const [zkSendRes, setZkSendRes] = useState<(SendResult & { to: string }) | null>(null);
   const [zkCountry, setZkCountry] = useState(840);
   const [zkDenied, setZkDenied] = useState(false);
+  const [zkStep, setZkStep] = useState(-1);
 
   const holderRows = wallet
     ? [{ addr: wallet, label: 'You', flag: '👛', country: 'US' }, ...BASE_HOLDERS]
@@ -131,18 +132,26 @@ export function LegacyDemo() {
     setError('');
     setZkDenied(false);
     setZkBusy(true);
+    setZkStep(0);
     try {
       const secret = BigInt('0x' + crypto.getRandomValues(new Uint8Array(8)).reduce((s, b) => s + b.toString(16).padStart(2, '0'), ''));
       const { proof, commitment } = await generateProof(zkCountry, secret);
+      setZkStep(1);
       const bytes = encodeProof(proof);
-      const res = await submitZkEligibility(wallet, commitment, bytes, (xdr) => signXDR(xdr, wallet));
+      const res = await submitZkEligibility(
+        wallet, commitment, bytes, (xdr) => signXDR(xdr, wallet),
+        (phase) => setZkStep(phase === 'register' ? 2 : 3),
+      );
       if (res.ok) {
+        setZkStep(4);
         setZkHash(res.proveHash);
         setZkVerified(true);
       } else {
         setError('Proof did not verify on-chain.');
+        setZkStep(-1);
       }
     } catch (e) {
+      setZkStep(-1);
       if (e instanceof IneligibleError) {
         setZkDenied(true);
       } else {
@@ -336,8 +345,23 @@ export function LegacyDemo() {
                 </select>
               </div>
               <button onClick={onProveZk} disabled={zkBusy}>
-                {zkBusy ? 'Generating proof in your browser…' : 'Prove eligibility (zero-knowledge)'}
+                {zkBusy ? 'Proving…' : 'Prove eligibility (zero-knowledge)'}
               </button>
+              {zkStep >= 0 && (
+                <ul className="zk-pipe">
+                  {[
+                    'Generating witness & Groth16 proof in your browser',
+                    'Encoding proof for the on-chain verifier (BLS12-381)',
+                    'Registering your private commitment',
+                    'Verifying the proof on-chain',
+                  ].map((s, i) => (
+                    <li key={i} className={i < zkStep ? 'done' : i === zkStep ? 'active' : ''}>
+                      <span className="zs">{i < zkStep ? '✓' : i === zkStep ? '' : i + 1}</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {zkDenied && (
                 <div className="result denied">
                   ❌ Not eligible — and the app never learned or transmitted your country.
